@@ -1,8 +1,11 @@
 import { AUTO, Game } from "phaser";
 import WebFont from "webfontloader";
-import BootScene from "./scenes/Boot";
-import GameScene from "./scenes/Game";
-import PreloadScene from "./scenes/Preload";
+import BootScene from "./scenes/BootScene";
+import CreditsScene from "./scenes/CreditsScene";
+import GameScene from "./scenes/GameScene";
+import MenuScene from "./scenes/MenuScene";
+import PreloadScene from "./scenes/PreloadScene";
+import SettingsScene from "./scenes/SettingsScene";
 import "./style.css";
 
 WebFont.load({
@@ -12,11 +15,21 @@ WebFont.load({
   active() {
     new Game({
       type: AUTO,
-      width: 800,
-      height: 400,
-      backgroundColor: "#535353",
+      width: 1200,
+      height: 600,
+      backgroundColor: "#4d4d4d",
+      render: {
+        powerPreference: "high-performance",
+      },
       parent: "game",
-      scene: [BootScene, PreloadScene, GameScene],
+      scene: [
+        BootScene,
+        PreloadScene,
+        MenuScene,
+        CreditsScene,
+        SettingsScene,
+        GameScene,
+      ],
     });
   },
 });
