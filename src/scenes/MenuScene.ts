@@ -1,17 +1,10 @@
 import type { Sound } from "phaser";
+import { t } from "../i18n";
 import Settings from "../settings";
 import { BaseScene } from "./BaseScene";
 
 export default class MenuScene extends BaseScene {
   public bgm!: Sound.WebAudioSound;
-
-  private buttons = [
-    { label: "Play", scene: "Game" },
-    { label: "Leaderboard", scene: "Leaderboard" },
-    { label: "Settings", scene: "Settings" },
-    { label: "Credits", scene: "Credits" },
-    { label: "Exit", scene: null },
-  ];
 
   private keyboardActive = true;
 
@@ -20,6 +13,14 @@ export default class MenuScene extends BaseScene {
   }
 
   create() {
+    const buttons = [
+      { label: t("menu.play"), scene: "Game" },
+      { label: t("menu.leaderboard"), scene: "Leaderboard" },
+      { label: t("menu.settings"), scene: "Settings" },
+      { label: "Credits", scene: "Credits" },
+      { label: t("menu.exit"), scene: null },
+    ];
+
     const settings = Settings.load();
     const existing = this.sound.get("bgm") as Sound.WebAudioSound;
     const bgm =
@@ -40,7 +41,7 @@ export default class MenuScene extends BaseScene {
     const centerY = height / 2;
 
     this.add
-      .text(centerX, centerY - 100, "Endless Runner", {
+      .text(centerX, centerY - 100, t("menu.title"), {
         fontSize: "40px",
         color: "#DFE8A6",
         fontFamily: "Black Ops One",
@@ -48,13 +49,13 @@ export default class MenuScene extends BaseScene {
       .setOrigin(0.5);
 
     let selectedIndex = 0;
-    const buttonRefs = this.buttons.map((btn, i) =>
+    const buttonRefs = buttons.map((btn, i) =>
       this.createButton(centerX, centerY - 20 + i * 40, btn.label, () => {
         if (btn.scene) {
           this.scene.start(btn.scene);
         } else {
           this.showConfirm(
-            "Want to check out\nthe source code?",
+            t("menu.exit.confirm"),
             () =>
               window.open(
                 "https://github.com/yourusername/endless-runner",
@@ -87,15 +88,14 @@ export default class MenuScene extends BaseScene {
         case "ArrowUp":
         case "w":
         case "W":
-          selectedIndex =
-            (selectedIndex - 1 + this.buttons.length) % this.buttons.length;
+          selectedIndex = (selectedIndex - 1 + buttons.length) % buttons.length;
           highlight(selectedIndex);
           break;
 
         case "ArrowDown":
         case "s":
         case "S":
-          selectedIndex = (selectedIndex + 1) % this.buttons.length;
+          selectedIndex = (selectedIndex + 1) % buttons.length;
           highlight(selectedIndex);
           break;
 

@@ -1,4 +1,5 @@
 import { GameObjects, Math, Sound } from "phaser";
+import { t } from "../i18n";
 import Settings, { type GameSettings } from "../settings";
 import { BaseScene } from "./BaseScene";
 
@@ -23,11 +24,14 @@ export default class SettingsScene extends BaseScene {
     const { width, height } = this.scale;
     const centerX = width / 2;
     const centerY = height / 2;
+    this.rows = [];
+    this.selectedRow = 0;
+    this.keyboardActive = true;
 
     this.current = Settings.load();
 
     this.add
-      .text(centerX, centerY - 160, "Settings", {
+      .text(centerX, centerY - 160, t("settings.title"), {
         fontSize: "36px",
         color: "#ffffff",
         fontFamily: "Black Ops One",
@@ -40,7 +44,7 @@ export default class SettingsScene extends BaseScene {
     const bgm = this.addSlider(
       centerX,
       centerY - 80,
-      "BGM Volume",
+      t("settings.bgmVolume"),
       this.current.bgmVolume,
       (val) => {
         this.current.bgmVolume = val;
@@ -50,14 +54,14 @@ export default class SettingsScene extends BaseScene {
     highlighters.push(bgm.highlight);
     this.rows.push({
       type: "slider",
-      label: "BGM Volume",
+      label: t("settings.bgmVolume"),
       onChange: (dir) => bgm.nudge(dir),
     });
 
     const sfx = this.addSlider(
       centerX,
       centerY - 20,
-      "SFX Volume",
+      t("settings.sfxVolume"),
       this.current.sfxVolume,
       (val) => {
         this.current.sfxVolume = val;
@@ -67,14 +71,14 @@ export default class SettingsScene extends BaseScene {
     highlighters.push(sfx.highlight);
     this.rows.push({
       type: "slider",
-      label: "SFX Volume",
+      label: t("settings.sfxVolume"),
       onChange: (dir) => sfx.nudge(dir),
     });
 
     const contrast = this.addSlider(
       centerX,
       centerY + 40,
-      "Contrast",
+      t("settings.contrast"),
       this.current.contrast,
       (val) => {
         this.current.contrast = val;
@@ -84,7 +88,7 @@ export default class SettingsScene extends BaseScene {
     highlighters.push(contrast.highlight);
     this.rows.push({
       type: "slider",
-      label: "Contrast",
+      label: t("settings.contrast"),
       onChange: (dir) => contrast.nudge(dir),
     });
 
@@ -101,7 +105,7 @@ export default class SettingsScene extends BaseScene {
     highlighters.push(lang.highlight);
     this.rows.push({
       type: "dropdown",
-      label: "Language",
+      label: t("settings.language"),
       onChange: (dir) => lang.nudge(dir),
       onSelect: () => lang.toggle(),
     });
@@ -127,7 +131,11 @@ export default class SettingsScene extends BaseScene {
     highlighters.push((active) =>
       back.setColor(active ? "#ffffff" : "#aaaaaa"),
     );
-    this.rows.push({ type: "slider", label: "Back", onChange: () => {} });
+    this.rows.push({
+      type: "slider",
+      label: t("settings.back"),
+      onChange: () => {},
+    });
 
     // initial highlight
     const highlightAll = (index: number) => {
@@ -136,7 +144,7 @@ export default class SettingsScene extends BaseScene {
     highlightAll(this.selectedRow);
 
     // keyboard nav
-    this.input.keyboard!.on("keydown", (e: KeyboardEvent) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (!this.keyboardActive) return;
 
       switch (e.key) {
@@ -180,6 +188,12 @@ export default class SettingsScene extends BaseScene {
           this.scene.start("Menu");
           break;
       }
+    };
+
+    this.input.keyboard!.on("keydown", onKeyDown);
+
+    this.events.once("shutdown", () => {
+      this.input.keyboard!.off("keydown", onKeyDown);
     });
 
     this.addFooter();
@@ -261,7 +275,7 @@ export default class SettingsScene extends BaseScene {
     ];
 
     const labelText = this.add
-      .text(x - trackWidth / 2, y, "Language", {
+      .text(x - trackWidth / 2, y, t("settings.language"), {
         fontSize: "13px",
         color: "#aaaaaa",
         fontFamily: "Black Ops One",

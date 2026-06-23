@@ -1,4 +1,5 @@
 import { GameObjects, Scene } from "phaser";
+import { t } from "../i18n";
 import Settings from "../settings";
 
 const VERSION = "v1.0.0";
@@ -12,7 +13,7 @@ export class BaseScene extends Scene {
     const bottomY = height - 24;
 
     this.add
-      .text(10, bottomY - 16, "Developed by", {
+      .text(10, bottomY - 16, t("footer.developedBy"), {
         fontSize: "11px",
         color: "#aaaaaa",
         fontFamily: "Black Ops One",
@@ -30,7 +31,7 @@ export class BaseScene extends Scene {
     this.add.rectangle(115, bottomY - 8, 1, 32, 0xaaaaaa);
 
     this.add
-      .text(130, bottomY - 16, "Version", {
+      .text(130, bottomY - 16, t("footer.version"), {
         fontSize: "11px",
         color: "#aaaaaa",
         fontFamily: "Black Ops One",
@@ -79,7 +80,7 @@ export class BaseScene extends Scene {
 
     // yes button
     const yes = this.add
-      .text(centerX - 60, centerY + 40, "Yes", {
+      .text(centerX - 60, centerY + 40, t("confirm.yes"), {
         fontSize: "16px",
         color: "#f26500",
         fontFamily: "Black Ops One",
@@ -89,7 +90,7 @@ export class BaseScene extends Scene {
 
     // no button
     const no = this.add
-      .text(centerX + 60, centerY + 40, "No", {
+      .text(centerX + 60, centerY + 40, t("confirm.no"), {
         fontSize: "16px",
         color: "#f26500",
         fontFamily: "Black Ops One",
