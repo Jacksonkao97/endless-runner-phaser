@@ -35,4 +35,12 @@ export default {
   // Shared
   "confirm.yes": "Yes",
   "confirm.no": "No",
+
+  "gameover.title": "GAME OVER",
+  "gameover.score": "SCORE",
+  "gameover.best": "BEST",
+  "gameover.newBest": "✦ NEW BEST ✦",
+  "gameover.retry": "Play Again",
+  "gameover.menu": "Main Menu",
+  "gameover.hint": "[ R ] RETRY  ·  [ ESC ] MENU",
 } as const;

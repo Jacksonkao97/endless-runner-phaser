@@ -6,8 +6,8 @@ export interface GameSettings {
 }
 
 const DEFAULTS: GameSettings = {
-  bgmVolume: 0.8,
-  sfxVolume: 0.8,
+  bgmVolume: 0.3,
+  sfxVolume: 0.3,
   language: "en",
   contrast: 0.5, // ← default midpoint
 };

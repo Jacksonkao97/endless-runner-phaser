@@ -35,4 +35,12 @@ export default {
   // Shared
   "confirm.yes": "是",
   "confirm.no": "否",
+
+  "gameover.title": "游戏结束",
+  "gameover.score": "得分",
+  "gameover.best": "最高",
+  "gameover.newBest": "✦ 新纪录 ✦",
+  "gameover.retry": "再玩一次",
+  "gameover.menu": "主菜单",
+  "gameover.hint": "[ R ] 重试  ·  [ ESC ] 菜单",
 } as const;
