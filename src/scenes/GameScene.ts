@@ -2,7 +2,7 @@ import { GameObjects, Input, Math, Physics, Time, type Types } from "phaser";
 import Settings from "../settings";
 import { BaseScene } from "./BaseScene";
 
-const GROUND_H = 16;
+const GROUND_H = 32;
 const GROUND_Y_OFFSET = 80; // px above bottom edge where ground surface sits
 const PLAYER_X_OFFSET = 120; // px from left edge where player stands
 const GRAVITY = 1800; // px/s²
@@ -29,6 +29,8 @@ const OBS_TOP_Y_OFFSET = 260; // px above groundY  → groundY - 260 (double jum
 
 export default class GameScene extends BaseScene {
   private player!: Types.Physics.Arcade.SpriteWithDynamicBody;
+  private groundSpriteTop!: GameObjects.TileSprite;
+  private groundSpriteFill!: GameObjects.TileSprite;
   private ground!: Physics.Arcade.StaticGroup;
   private obstacles!: Physics.Arcade.Group;
 
@@ -76,6 +78,10 @@ export default class GameScene extends BaseScene {
       SCROLL_SPEED_MAX,
     );
 
+    // Scroll the ground left
+    this.groundSpriteTop.tilePositionX += this.scrollSpeed * (delta / 1000);
+    this.groundSpriteFill.tilePositionX += this.scrollSpeed * (delta / 1000);
+
     // Scroll all obstacles left
     this.obstacles.getChildren().forEach((obj) => {
       const obs = obj as Physics.Arcade.Image;
@@ -89,10 +95,9 @@ export default class GameScene extends BaseScene {
       this.player.body.velocity.y >= 0;
 
     if (onGround && !this.isOnGround) {
-      // Just landed
       this.jumpCount = 0;
-      // Stand back up if crouch key released while in air
       if (!this.isCrouching) this.standUp();
+      this.player.play("run");
     }
     this.isOnGround = onGround;
 
@@ -101,23 +106,35 @@ export default class GameScene extends BaseScene {
     this.scoreText.setText(`${Math.FloorTo(this.score)}`);
   }
 
-  private buildGround(width: number, height: number) {
-    this.add
-      .rectangle(
+  private buildGround(width: number, _height: number) {
+    this.groundSpriteTop = this.add
+      .tileSprite(
         width / 2,
         this.groundY + GROUND_H / 2,
         width,
         GROUND_H,
-        0xf26500,
+        "ground_texture",
+        1,
       )
       .setDepth(1);
 
-    if (!this.textures.exists("ground_px")) {
+    this.groundSpriteFill = this.add
+      .tileSprite(
+        width / 2,
+        this.groundY + GROUND_H + GROUND_H / 2,
+        width,
+        GROUND_H,
+        "ground_texture",
+        19,
+      )
+      .setDepth(1);
+
+    if (!this.textures.exists("ground_texture")) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.setVisible(false);
       gfx.fillStyle(0xffffff);
       gfx.fillRect(0, 0, 1, 1);
-      gfx.generateTexture("ground_px", 1, 1);
+      gfx.generateTexture("ground_texture", 1, 1);
       gfx.destroy();
     }
 
@@ -125,7 +142,7 @@ export default class GameScene extends BaseScene {
     const groundImg = this.ground.create(
       width / 2,
       this.groundY + GROUND_H / 2,
-      "ground_px",
+      "ground_texture",
     ) as Physics.Arcade.Image;
     groundImg.setVisible(false);
     groundImg.setDisplaySize(width * 3, GROUND_H);
@@ -135,20 +152,59 @@ export default class GameScene extends BaseScene {
   private buildPlayer() {
     const playerY = this.groundY - PLAYER_H / 2;
 
-    if (!this.textures.exists("player_placeholder")) {
+    if (!this.textures.exists("character")) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.setVisible(false);
       gfx.fillStyle(0xdfe8a6);
       gfx.fillRect(0, 0, PLAYER_W, PLAYER_H);
-      gfx.generateTexture("player_placeholder", PLAYER_W, PLAYER_H);
+      gfx.generateTexture("character", PLAYER_W, PLAYER_H);
       gfx.destroy();
+    }
+
+    if (!this.anims.exists("run")) {
+      this.anims.create({
+        key: "run",
+        frames: this.anims.generateFrameNumbers("character", {
+          start: 20,
+          end: 27,
+        }),
+        frameRate: 16,
+        repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists("jump")) {
+      this.anims.create({
+        key: "jump",
+        frames: this.anims.generateFrameNumbers("character", {
+          start: 30,
+          end: 33,
+        }),
+        frameRate: 8,
+        repeat: 0,
+        hideOnComplete: false,
+      });
+    }
+
+    if (!this.anims.exists("fall")) {
+      this.anims.create({
+        key: "fall",
+        frames: this.anims.generateFrameNumbers("character", {
+          start: 40,
+          end: 44,
+        }),
+        frameRate: 8,
+        repeat: 0,
+      });
     }
 
     this.player = this.physics.add.sprite(
       PLAYER_X_OFFSET,
       playerY,
-      "player_placeholder",
+      "character",
     );
+    this.player.setFlipX(true);
+    this.player.play("run");
     this.player.setGravityY(GRAVITY);
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(2);
@@ -206,10 +262,6 @@ export default class GameScene extends BaseScene {
       .setDepth(10);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Obstacle spawning
-  // ─────────────────────────────────────────────────────────────────────────────
-
   private scheduleObstacle() {
     const delay = Math.Between(OBSTACLE_INTERVAL_MIN, OBSTACLE_INTERVAL_MAX);
     this.obstacleTimer = this.time.delayedCall(delay, () => {
@@ -264,10 +316,6 @@ export default class GameScene extends BaseScene {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Player actions
-  // ─────────────────────────────────────────────────────────────────────────────
-
   private tryJump() {
     if (this.isGameOver) return;
     if (this.isCrouching) return; // can't jump while crouching
@@ -276,12 +324,16 @@ export default class GameScene extends BaseScene {
       // First jump
       this.player.setVelocityY(JUMP_VELOCITY);
       this.jumpCount = 1;
-      this.playSfx("sfx_jump");
+      // this.playSfx("sfx_jump");
+      this.player.play("jump");
+      this.player.chain("fall");
     } else if (!this.isOnGround && this.jumpCount === 1) {
       // Double jump
       this.player.setVelocityY(JUMP2_VELOCITY);
       this.jumpCount = 2;
-      this.playSfx("sfx_jump");
+      // this.playSfx("sfx_jump");
+      this.player.play("jump");
+      this.player.chain("fall");
     }
   }
 
@@ -308,10 +360,6 @@ export default class GameScene extends BaseScene {
     this.player.body.setSize(PLAYER_W, PLAYER_H);
     this.player.body.setOffset(0, 0);
   }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Input
-  // ─────────────────────────────────────────────────────────────────────────────
 
   private setupInput() {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -358,10 +406,6 @@ export default class GameScene extends BaseScene {
       if (this.obstacleTimer) this.obstacleTimer.remove();
     });
   }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Game Over
-  // ─────────────────────────────────────────────────────────────────────────────
 
   private triggerGameOver() {
     if (this.isGameOver) return;

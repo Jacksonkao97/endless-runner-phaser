@@ -91,6 +91,14 @@ export default class PreloadScene extends BaseScene {
     });
 
     this.load.audio("bgm", "assets/audio/bgm_1.mp3");
+    this.load.spritesheet("ground_texture", "assets/images/Floor Tiles1.png", {
+      frameWidth: 32, // width of each tile
+      frameHeight: 32, // height of each tile
+    });
+    this.load.spritesheet("character", "assets/images/Male Skin2.png", {
+      frameWidth: 80,
+      frameHeight: 64,
+    });
 
     // Remove when have real assets to load.
     this.tweens.add({

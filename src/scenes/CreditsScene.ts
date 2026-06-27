@@ -49,6 +49,10 @@ export default class CreditsScene extends BaseScene {
         ],
       },
       {
+        label: "ART & ASSETS",
+        lines: ["GandalfHardcore", "2D Pixel Art Asset Pack", "itch.io"],
+      },
+      {
         label: "BUILT WITH",
         lines: ["Phaser 3  ·  TypeScript  ·  Vite"],
       },
