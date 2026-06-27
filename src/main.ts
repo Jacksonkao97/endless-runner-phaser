@@ -2,6 +2,7 @@ import { AUTO, Game } from "phaser";
 import WebFont from "webfontloader";
 import BootScene from "./scenes/BootScene";
 import CreditsScene from "./scenes/CreditsScene";
+import GameOverScene from "./scenes/GameOverScene";
 import GameScene from "./scenes/GameScene";
 import MenuScene from "./scenes/MenuScene";
 import PreloadScene from "./scenes/PreloadScene";
@@ -36,6 +37,7 @@ WebFont.load({
         CreditsScene,
         SettingsScene,
         GameScene,
+        GameOverScene,
       ],
     });
   },
