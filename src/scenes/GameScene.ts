@@ -1,22 +1,31 @@
-import { GameObjects, Math, Physics, type Types } from "phaser";
+import { GameObjects, Input, Math, Physics, Time, type Types } from "phaser";
 import Settings from "../settings";
 import { BaseScene } from "./BaseScene";
 
+const GROUND_H = 16;
 const GROUND_Y_OFFSET = 80; // px above bottom edge where ground surface sits
 const PLAYER_X_OFFSET = 120; // px from left edge where player stands
 const GRAVITY = 1800; // px/s²
-const JUMP_VELOCITY = -620; // px/s  (negative = upward)
+const JUMP_VELOCITY = -680; // px/s — single jump (clears ground obs)
+const JUMP2_VELOCITY = -580; // px/s — second jump (clears mid obs)
 const SCROLL_SPEED_INITIAL = 380; // px/s
-const SCROLL_SPEED_MAX = 900; // px/s  (speed cap)
-const SCROLL_ACCELERATION = 8; // px/s added per second
-const OBSTACLE_INTERVAL_MIN = 900; // ms between spawns (min)
-const OBSTACLE_INTERVAL_MAX = 2200; // ms between spawns (max)
-const OBSTACLE_W = 32;
-const OBSTACLE_H_SHORT = 48;
-const OBSTACLE_H_TALL = 80;
+const SCROLL_SPEED_MAX = 900; // px/s
+const SCROLL_ACCELERATION = 8; // px/s per second
+const OBSTACLE_INTERVAL_MIN = 900; // ms
+const OBSTACLE_INTERVAL_MAX = 2200; // ms
+
 const PLAYER_W = 32;
 const PLAYER_H = 52;
-const GROUND_H = 16;
+const PLAYER_H_CROUCH = 26; // half height when crouching
+
+const OBS_W = 32;
+const OBS_GROUND_H = 48; // sits on ground
+const OBS_MID_W = 52; // wider floating block
+const OBS_MID_H = 32;
+const OBS_TOP_W = 64;
+const OBS_TOP_H = 28;
+const OBS_MID_Y_OFFSET = 210; // px above groundY  → groundY - 210
+const OBS_TOP_Y_OFFSET = 260; // px above groundY  → groundY - 260 (double jump reaches here)
 
 export default class GameScene extends BaseScene {
   private player!: Types.Physics.Arcade.SpriteWithDynamicBody;
@@ -27,10 +36,12 @@ export default class GameScene extends BaseScene {
   private score = 0;
   private isGameOver = false;
   private isOnGround = false;
+  private jumpCount = 0; // 0 = grounded, 1 = first jump, 2 = second jump used
+  private isCrouching = false;
   private groundY = 0;
 
   private scoreText!: GameObjects.Text;
-  private obstacleTimer!: Phaser.Time.TimerEvent;
+  private obstacleTimer!: Time.TimerEvent;
 
   constructor() {
     super("Game");
@@ -40,50 +51,57 @@ export default class GameScene extends BaseScene {
     const { width, height } = this.scale;
     this.isGameOver = false;
     this.isOnGround = false;
+    this.isCrouching = false;
+    this.jumpCount = 0;
     this.score = 0;
     this.scrollSpeed = SCROLL_SPEED_INITIAL;
     this.groundY = height - GROUND_Y_OFFSET;
 
     this.buildGround(width, height);
-    this.buildPlayer(height);
+    this.buildPlayer();
     this.buildObstacleGroup();
     this.buildScore(width);
     this.scheduleObstacle();
     this.setupInput();
 
-    this.addFooter();
     this.applyContrast(Settings.load().contrast);
   }
 
+  // ── update ────────────────────────────────────────────────────────────────────
   update(_time: number, delta: number) {
     if (this.isGameOver) return;
 
-    // Accelerate world scroll over time
     this.scrollSpeed = window.Math.min(
       this.scrollSpeed + SCROLL_ACCELERATION * (delta / 1000),
       SCROLL_SPEED_MAX,
     );
 
-    // Scroll obstacles
+    // Scroll all obstacles left
     this.obstacles.getChildren().forEach((obj) => {
       const obs = obj as Physics.Arcade.Image;
       obs.x -= this.scrollSpeed * (delta / 1000);
-      // Recycle when fully off-screen left
       if (obs.x < -obs.width) obs.destroy();
     });
 
-    // Track ground contact
-    this.isOnGround =
+    // Ground contact — reset jump count when landing
+    const onGround =
       (this.player.body.blocked.down || this.player.body.touching.down) &&
       this.player.body.velocity.y >= 0;
 
-    // Score: 1 point per 10 px scrolled
+    if (onGround && !this.isOnGround) {
+      // Just landed
+      this.jumpCount = 0;
+      // Stand back up if crouch key released while in air
+      if (!this.isCrouching) this.standUp();
+    }
+    this.isOnGround = onGround;
+
+    // Score
     this.score += (this.scrollSpeed * (delta / 1000)) / 10;
     this.scoreText.setText(`${Math.FloorTo(this.score)}`);
   }
 
   private buildGround(width: number, height: number) {
-    // Visual ground strip
     this.add
       .rectangle(
         width / 2,
@@ -94,8 +112,6 @@ export default class GameScene extends BaseScene {
       )
       .setDepth(1);
 
-    // Generate a minimal 1×1 texture — needed because Phaser 4
-    // staticGroup.create() requires a valid texture key
     if (!this.textures.exists("ground_px")) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.setVisible(false);
@@ -105,7 +121,6 @@ export default class GameScene extends BaseScene {
       gfx.destroy();
     }
 
-    // Use staticGroup + explicit texture key (Phaser 4 compatible)
     this.ground = this.physics.add.staticGroup();
     const groundImg = this.ground.create(
       width / 2,
@@ -117,11 +132,9 @@ export default class GameScene extends BaseScene {
     groundImg.refreshBody();
   }
 
-  private buildPlayer(height: number) {
-    // Placeholder: a white rectangle standing on the ground
+  private buildPlayer() {
     const playerY = this.groundY - PLAYER_H / 2;
 
-    // Generate placeholder texture once; guarded for scene restarts
     if (!this.textures.exists("player_placeholder")) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.setVisible(false);
@@ -140,32 +153,43 @@ export default class GameScene extends BaseScene {
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(2);
 
-    // Player ↔ ground collision
+    // Physics body matches standing height by default
+    this.player.body.setSize(PLAYER_W, PLAYER_H);
+
     this.physics.add.collider(this.player, this.ground);
   }
 
   private buildObstacleGroup() {
-    // Obstacle textures (short + tall) — guarded so they survive scene restart
-    if (!this.textures.exists("obs_short")) {
-      const shortGfx = this.make.graphics({ x: 0, y: 0 });
-      shortGfx.setVisible(false);
-      shortGfx.fillStyle(0xff4444);
-      shortGfx.fillRect(0, 0, OBSTACLE_W, OBSTACLE_H_SHORT);
-      shortGfx.generateTexture("obs_short", OBSTACLE_W, OBSTACLE_H_SHORT);
-      shortGfx.destroy();
+    // Ground obstacle texture
+    if (!this.textures.exists("obs_ground")) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.setVisible(false);
+      gfx.fillStyle(0xff4444);
+      gfx.fillRect(0, 0, OBS_W, OBS_GROUND_H);
+      gfx.generateTexture("obs_ground", OBS_W, OBS_GROUND_H);
+      gfx.destroy();
     }
-    if (!this.textures.exists("obs_tall")) {
-      const tallGfx = this.make.graphics({ x: 0, y: 0 });
-      tallGfx.setVisible(false);
-      tallGfx.fillStyle(0xff4444);
-      tallGfx.fillRect(0, 0, OBSTACLE_W, OBSTACLE_H_TALL);
-      tallGfx.generateTexture("obs_tall", OBSTACLE_W, OBSTACLE_H_TALL);
-      tallGfx.destroy();
+    // Mid floating obstacle texture (orange tint — different danger signal)
+    if (!this.textures.exists("obs_mid")) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.setVisible(false);
+      gfx.fillStyle(0xff8800);
+      gfx.fillRect(0, 0, OBS_MID_W, OBS_MID_H);
+      gfx.generateTexture("obs_mid", OBS_MID_W, OBS_MID_H);
+      gfx.destroy();
+    }
+    // Top floating obstacle texture (yellow — highest threat)
+    if (!this.textures.exists("obs_top")) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.setVisible(false);
+      gfx.fillStyle(0xffdd00);
+      gfx.fillRect(0, 0, OBS_TOP_W, OBS_TOP_H);
+      gfx.generateTexture("obs_top", OBS_TOP_W, OBS_TOP_H);
+      gfx.destroy();
     }
 
     this.obstacles = this.physics.add.group();
 
-    // Player ↔ obstacle overlap → game over
     this.physics.add.overlap(this.player, this.obstacles, () => {
       this.triggerGameOver();
     });
@@ -182,26 +206,53 @@ export default class GameScene extends BaseScene {
       .setDepth(10);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Obstacle spawning
+  // ─────────────────────────────────────────────────────────────────────────────
+
   private scheduleObstacle() {
     const delay = Math.Between(OBSTACLE_INTERVAL_MIN, OBSTACLE_INTERVAL_MAX);
-
     this.obstacleTimer = this.time.delayedCall(delay, () => {
       if (!this.isGameOver) {
         this.spawnObstacle();
-        this.scheduleObstacle(); // reschedule
+        this.scheduleObstacle();
       }
     });
   }
 
   private spawnObstacle() {
     const { width } = this.scale;
-    const isTall = window.Math.random() < 0.35; // 35% chance of tall obstacle
-    const texKey = isTall ? "obs_tall" : "obs_short";
-    const obsH = isTall ? OBSTACLE_H_TALL : OBSTACLE_H_SHORT;
+
+    // Weighted random: 50% ground, 30% mid, 20% top
+    const roll = window.Math.random();
+    let texKey: string;
+    let obsY: number;
+    let obsW: number;
+    let obsH: number;
+
+    if (roll < 0.5) {
+      // Ground obstacle — jump over it
+      texKey = "obs_ground";
+      obsW = OBS_W;
+      obsH = OBS_GROUND_H;
+      obsY = this.groundY - obsH / 2;
+    } else if (roll < 0.8) {
+      // Mid floating — double jump or crouch under it
+      texKey = "obs_mid";
+      obsW = OBS_MID_W;
+      obsH = OBS_MID_H;
+      obsY = this.groundY - OBS_MID_Y_OFFSET;
+    } else {
+      // Top floating — must crouch (double jump will hit it)
+      texKey = "obs_top";
+      obsW = OBS_TOP_W;
+      obsH = OBS_TOP_H;
+      obsY = this.groundY - OBS_TOP_Y_OFFSET;
+    }
 
     const obs = this.obstacles.create(
-      width + OBSTACLE_W,
-      this.groundY - obsH / 2,
+      width + obsW,
+      obsY,
       texKey,
     ) as Physics.Arcade.Image;
 
@@ -209,34 +260,98 @@ export default class GameScene extends BaseScene {
     obs.setDepth(2);
     if (obs.body) {
       (obs.body as Physics.Arcade.Body).allowGravity = false;
+      (obs.body as Physics.Arcade.Body).setSize(obsW, obsH);
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Player actions
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  private tryJump() {
+    if (this.isGameOver) return;
+    if (this.isCrouching) return; // can't jump while crouching
+
+    if (this.isOnGround && this.jumpCount === 0) {
+      // First jump
+      this.player.setVelocityY(JUMP_VELOCITY);
+      this.jumpCount = 1;
+      this.playSfx("sfx_jump");
+    } else if (!this.isOnGround && this.jumpCount === 1) {
+      // Double jump
+      this.player.setVelocityY(JUMP2_VELOCITY);
+      this.jumpCount = 2;
+      this.playSfx("sfx_jump");
+    }
+  }
+
+  private crouchDown() {
+    if (this.isGameOver) return;
+    if (this.isCrouching) return;
+    this.isCrouching = true;
+
+    // NEVER use setScale on a physics sprite in Phaser 4 — it scales the
+    // body dimensions too, shrinking the body to 13px instead of 26px.
+    // Only resize the physics body and use setOffset to keep feet at groundY.
+    // With center origin: body bottom = sprite.y + bodyH/2.
+    // After setSize to PLAYER_H_CROUCH (26), bottom rises by (52-26)/2 = 13px.
+    // setOffset(0, 13) shifts body down 13px, restoring bottom to groundY.
+    const diff = (PLAYER_H - PLAYER_H_CROUCH) / 2; // = 13
+    this.player.body.setSize(PLAYER_W, PLAYER_H_CROUCH);
+    this.player.body.setOffset(0, diff);
+  }
+
+  private standUp() {
+    if (!this.isCrouching) return;
+    this.isCrouching = false;
+
+    this.player.body.setSize(PLAYER_W, PLAYER_H);
+    this.player.body.setOffset(0, 0);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Input
+  // ─────────────────────────────────────────────────────────────────────────────
+
   private setupInput() {
-    // Jump on Space / ArrowUp / W / tap
-    const jump = () => {
-      if (this.isGameOver) return;
-      if (this.isOnGround) {
-        this.player.setVelocityY(JUMP_VELOCITY);
-        this.playSfx("sfx_jump"); // wire up your SFX key when ready
+    const onKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case " ":
+        case "ArrowUp":
+        case "w":
+        case "W":
+          this.tryJump();
+          break;
+
+        case "ArrowDown":
+        case "s":
+        case "S":
+          this.crouchDown();
+          break;
       }
     };
 
-    this.input.keyboard!.on("keydown", (e: KeyboardEvent) => {
-      if (
-        e.key === " " ||
-        e.key === "ArrowUp" ||
-        e.key === "w" ||
-        e.key === "W"
-      ) {
-        jump();
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
+        // Only stand up if on ground; if in air, standUp runs on landing
+        if (this.isOnGround) this.standUp();
+        else this.isCrouching = false; // flag cleared, standUp fires on land
       }
+    };
+
+    this.input.keyboard!.on("keydown", onKeyDown);
+    this.input.keyboard!.on("keyup", onKeyUp);
+
+    // Touch: tap upper half = jump, tap lower half = crouch
+    this.input.on("pointerdown", (ptr: Input.Pointer) => {
+      if (ptr.y < this.scale.height / 2) this.tryJump();
+      else this.crouchDown();
+    });
+    this.input.on("pointerup", () => {
+      if (this.isOnGround) this.standUp();
+      else this.isCrouching = false;
     });
 
-    // Touch / click
-    this.input.on("pointerdown", jump);
-
-    // Cleanup on shutdown
     this.events.once("shutdown", () => {
       this.input.keyboard!.removeAllListeners();
       this.input.removeAllListeners();
@@ -244,16 +359,18 @@ export default class GameScene extends BaseScene {
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Game Over
+  // ─────────────────────────────────────────────────────────────────────────────
+
   private triggerGameOver() {
     if (this.isGameOver) return;
     this.isGameOver = true;
 
-    // Stop all obstacles in place
     this.obstacles.getChildren().forEach((obj) => {
       (obj as Physics.Arcade.Image).setActive(false);
     });
 
-    // Brief red flash on player
     this.tweens.add({
       targets: this.player,
       alpha: 0,
