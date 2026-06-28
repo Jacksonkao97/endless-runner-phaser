@@ -1,3 +1,4 @@
+import { audio, images, spritesheets } from "../assets";
 import { BaseScene } from "./BaseScene";
 
 const messages = [
@@ -90,15 +91,13 @@ export default class PreloadScene extends BaseScene {
       tryStart();
     });
 
-    this.load.audio("bgm", "assets/audio/bgm_1.mp3");
-    this.load.spritesheet("ground_texture", "assets/images/Floor Tiles1.png", {
-      frameWidth: 32, // width of each tile
-      frameHeight: 32, // height of each tile
-    });
-    this.load.spritesheet("character", "assets/images/Male Skin2.png", {
-      frameWidth: 80,
-      frameHeight: 64,
-    });
+    images.forEach(({ key, path }) => this.load.image(key, path));
+
+    spritesheets.forEach(({ key, path, frameWidth, frameHeight }) =>
+      this.load.spritesheet(key, path, { frameWidth, frameHeight }),
+    );
+
+    audio.forEach(({ key, path }) => this.load.audio(key, path));
 
     // Remove when have real assets to load.
     this.tweens.add({

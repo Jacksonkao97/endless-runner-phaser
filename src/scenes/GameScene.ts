@@ -27,12 +27,68 @@ const OBS_TOP_H = 28;
 const OBS_MID_Y_OFFSET = 210; // px above groundY  → groundY - 210
 const OBS_TOP_Y_OFFSET = 260; // px above groundY  → groundY - 260 (double jump reaches here)
 
+type BgLayerDef = { key: string; parallax: number; depth: number };
+const BG_LAYER_DEFS: BgLayerDef[] = [
+  { key: "bg_sky", parallax: 0.0, depth: -5 },
+  { key: "bg_hills", parallax: 0.05, depth: -4 },
+  { key: "bg_treeline_1", parallax: 0.12, depth: -3 },
+  { key: "bg_treeline_2", parallax: 0.25, depth: -2 },
+  { key: "bg_tree", parallax: 0.4, depth: -1 },
+];
+
+type DecoCategory = {
+  keys: string[]; // texture keys in this category (picked randomly)
+  parallax: number; // scroll factor
+  depth: number;
+  yMode: "sky" | "ground"; // where to place it vertically
+  minGap: number; // ms minimum between spawns in this category
+  maxGap: number;
+  allowOverlap?: boolean;
+  timer?: Time.TimerEvent;
+  lastItem?: GameObjects.Image;
+};
+const DECO_CATEGORIES: DecoCategory[] = [
+  {
+    // Clouds — can overlap each other, so minGap is just time-based
+    keys: ["cloud_1", "cloud_2", "cloud_3", "cloud_4", "cloud_5", "cloud_6"],
+    parallax: 0.07,
+    depth: -1.5,
+    yMode: "sky",
+    minGap: 800,
+    maxGap: 2000,
+    allowOverlap: true,
+  },
+  {
+    // Foreground trees — no overlap, wider gap
+    keys: ["large_tent", "small_tent"],
+    parallax: 0.8,
+    depth: -1,
+    yMode: "ground",
+    minGap: 4000,
+    maxGap: 6000,
+    allowOverlap: false,
+  },
+  {
+    // Mid-ground props (rocks, bushes) — no overlap
+    keys: ["tall_grass"],
+    parallax: 0.8,
+    depth: -0.8,
+    yMode: "ground",
+    minGap: 1500,
+    maxGap: 3500,
+    allowOverlap: true,
+  },
+];
+
 export default class GameScene extends BaseScene {
   private player!: Types.Physics.Arcade.SpriteWithDynamicBody;
   private groundSpriteTop!: GameObjects.TileSprite;
   private groundSpriteFill!: GameObjects.TileSprite;
   private ground!: Physics.Arcade.StaticGroup;
   private obstacles!: Physics.Arcade.Group;
+
+  private bgLayers: GameObjects.TileSprite[] = [];
+  private bgDecorations!: GameObjects.Group;
 
   private scrollSpeed = SCROLL_SPEED_INITIAL;
   private score = 0;
@@ -58,12 +114,16 @@ export default class GameScene extends BaseScene {
     this.score = 0;
     this.scrollSpeed = SCROLL_SPEED_INITIAL;
     this.groundY = height - GROUND_Y_OFFSET;
+    this.bgLayers = [];
 
+    this.buildBackground(width, height);
     this.buildGround(width, height);
     this.buildPlayer();
     this.buildObstacleGroup();
+    this.buildDecorations();
     this.buildScore(width);
     this.scheduleObstacle();
+    this.scheduleDecoration();
     this.setupInput();
 
     this.applyContrast(Settings.load().contrast);
@@ -78,6 +138,14 @@ export default class GameScene extends BaseScene {
       SCROLL_SPEED_MAX,
     );
 
+    // Scroll parallax bg tile layers
+    this.bgLayers.forEach((layer) => {
+      const factor: number = (layer as any).__parallax;
+      if (factor > 0) {
+        layer.tilePositionX += this.scrollSpeed * factor * (delta / 1000);
+      }
+    });
+
     // Scroll the ground left
     this.groundSpriteTop.tilePositionX += this.scrollSpeed * (delta / 1000);
     this.groundSpriteFill.tilePositionX += this.scrollSpeed * (delta / 1000);
@@ -87,6 +155,13 @@ export default class GameScene extends BaseScene {
       const obs = obj as Physics.Arcade.Image;
       obs.x -= this.scrollSpeed * (delta / 1000);
       if (obs.x < -obs.width) obs.destroy();
+    });
+
+    // Scroll bg decorations (clouds, trees) at their own parallax factor
+    this.bgDecorations.getChildren().forEach((obj) => {
+      const dec = obj as GameObjects.Image & { __parallax: number };
+      dec.x -= this.scrollSpeed * dec.__parallax * (delta / 1000);
+      if (dec.x < -(dec.width ?? 64)) dec.destroy();
     });
 
     // Ground contact — reset jump count when landing
@@ -104,6 +179,81 @@ export default class GameScene extends BaseScene {
     // Score
     this.score += (this.scrollSpeed * (delta / 1000)) / 10;
     this.scoreText.setText(`${Math.FloorTo(this.score)}`);
+  }
+
+  private buildBackground(width: number, height: number) {
+    const TEX_H = 346;
+    const scaleY = height / TEX_H;
+
+    // ── Sky: full-bleed stretched TileSprite ──────────────────────────────────
+    const skyDef = BG_LAYER_DEFS[0];
+    const skyLayer = this.add
+      .tileSprite(width / 2, height / 2, width, height, skyDef.key)
+      .setOrigin(0.5, 0.5)
+      .setTileScale(1, scaleY)
+      .setDepth(skyDef.depth);
+    (skyLayer as any).__parallax = skyDef.parallax;
+    this.bgLayers.push(skyLayer);
+
+    // ── Layers 2–5: anchored to bottom ───────────────────────────────────────
+    for (const def of BG_LAYER_DEFS.slice(1)) {
+      const layer = this.add
+        .tileSprite(width / 2, height, width, TEX_H, def.key)
+        .setOrigin(0.5, 1)
+        .setDepth(def.depth);
+      (layer as any).__parallax = def.parallax;
+      this.bgLayers.push(layer);
+    }
+  }
+
+  private buildDecorations() {
+    this.bgDecorations = this.add.group();
+  }
+
+  private scheduleDecoration() {
+    for (const cat of DECO_CATEGORIES) {
+      this.scheduleCategorySpawn(cat);
+    }
+  }
+
+  private scheduleCategorySpawn(cat: DecoCategory) {
+    const delay = Math.Between(cat.minGap, cat.maxGap);
+    cat.timer = this.time.delayedCall(delay, () => {
+      if (!this.isGameOver) {
+        this.spawnDecoration(cat);
+        this.scheduleCategorySpawn(cat); // reschedule
+      }
+    });
+  }
+
+  private spawnDecoration(cat: DecoCategory) {
+    const { width } = this.scale;
+
+    // Overlap guard — skip this spawn if the previous item hasn't cleared
+    // the right edge of the screen yet. Rescheduling handles the retry.
+    if (!cat.allowOverlap && cat.lastItem?.active) {
+      const lastRight = cat.lastItem.x + cat.lastItem.width;
+      if (lastRight > width) return; // still on screen, skip
+    }
+
+    const texKey = cat.keys[Math.Between(0, cat.keys.length - 1)];
+    const src = this.textures.get(texKey).getSourceImage() as HTMLImageElement;
+
+    let y: number;
+    if (cat.yMode === "sky") {
+      y = Math.Between(50, this.groundY - 280);
+    } else {
+      y = this.groundY - src.height;
+    }
+
+    const dec = this.add
+      .image(width + src.width, y, texKey)
+      .setOrigin(0, 0)
+      .setDepth(cat.depth);
+
+    (dec as any).__parallax = cat.parallax;
+    this.bgDecorations.add(dec);
+    cat.lastItem = dec;
   }
 
   private buildGround(width: number, _height: number) {
@@ -194,6 +344,18 @@ export default class GameScene extends BaseScene {
           end: 44,
         }),
         frameRate: 8,
+        repeat: 0,
+      });
+    }
+
+    if (!this.anims.exists("dead")) {
+      this.anims.create({
+        key: "dead",
+        frames: this.anims.generateFrameNumbers("character", {
+          start: 60,
+          end: 69,
+        }),
+        frameRate: 20,
         repeat: 0,
       });
     }
@@ -374,7 +536,7 @@ export default class GameScene extends BaseScene {
         case "ArrowDown":
         case "s":
         case "S":
-          this.crouchDown();
+          // this.crouchDown();
           break;
       }
     };
@@ -383,7 +545,7 @@ export default class GameScene extends BaseScene {
       if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
         // Only stand up if on ground; if in air, standUp runs on landing
         if (this.isOnGround) this.standUp();
-        else this.isCrouching = false; // flag cleared, standUp fires on land
+        // else this.isCrouching = false;
       }
     };
 
@@ -392,18 +554,22 @@ export default class GameScene extends BaseScene {
 
     // Touch: tap upper half = jump, tap lower half = crouch
     this.input.on("pointerdown", (ptr: Input.Pointer) => {
-      if (ptr.y < this.scale.height / 2) this.tryJump();
-      else this.crouchDown();
+      this.tryJump();
+      // if (ptr.y < this.scale.height / 2) this.tryJump();
+      // else this.crouchDown();
     });
     this.input.on("pointerup", () => {
       if (this.isOnGround) this.standUp();
-      else this.isCrouching = false;
+      // else this.isCrouching = false;
     });
 
     this.events.once("shutdown", () => {
       this.input.keyboard!.removeAllListeners();
       this.input.removeAllListeners();
       if (this.obstacleTimer) this.obstacleTimer.remove();
+      for (const cat of DECO_CATEGORIES) {
+        cat.timer?.remove();
+      }
     });
   }
 
@@ -415,15 +581,11 @@ export default class GameScene extends BaseScene {
       (obj as Physics.Arcade.Image).setActive(false);
     });
 
-    this.tweens.add({
-      targets: this.player,
-      alpha: 0,
-      duration: 80,
-      yoyo: true,
-      repeat: 3,
-      onComplete: () => {
+    this.player.play("dead");
+    this.player.once("animationcomplete-dead", () => {
+      this.time.delayedCall(500, () => {
         this.scene.start("GameOver", { score: Math.FloorTo(this.score) });
-      },
+      });
     });
   }
 }

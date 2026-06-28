@@ -16,7 +16,7 @@ WebFont.load({
   active() {
     new Game({
       type: AUTO,
-      width: 1200,
+      width: 800,
       height: 600,
       backgroundColor: "#4d4d4d",
       render: {
@@ -27,7 +27,7 @@ WebFont.load({
         default: "arcade",
         arcade: {
           gravity: { x: 0, y: 0 },
-          debug: false,
+          debug: true,
         },
       },
       scene: [
