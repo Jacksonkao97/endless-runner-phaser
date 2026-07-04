@@ -4,6 +4,7 @@ import BootScene from "./scenes/BootScene";
 import CreditsScene from "./scenes/CreditsScene";
 import GameOverScene from "./scenes/GameOverScene";
 import GameScene from "./scenes/GameScene";
+import LeaderboardScene from "./scenes/LeaderboardScene";
 import MenuScene from "./scenes/MenuScene";
 import PreloadScene from "./scenes/PreloadScene";
 import SettingsScene from "./scenes/SettingsScene";
@@ -34,6 +35,7 @@ WebFont.load({
         BootScene,
         PreloadScene,
         MenuScene,
+        LeaderboardScene,
         CreditsScene,
         SettingsScene,
         GameScene,
