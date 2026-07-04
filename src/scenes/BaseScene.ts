@@ -2,7 +2,8 @@ import { GameObjects, Scene } from "phaser";
 import { t } from "../i18n";
 import Settings from "../settings";
 
-const VERSION = "v1.0.0";
+declare const __APP_VERSION__: string;
+const VERSION = `v${__APP_VERSION__}`;
 const DEV_NAME = "Jackson Kao";
 
 export class BaseScene extends Scene {
