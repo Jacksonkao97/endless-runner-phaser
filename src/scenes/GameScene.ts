@@ -6,8 +6,8 @@ const GROUND_H = 32;
 const GROUND_Y_OFFSET = 80; // px above bottom edge where ground surface sits
 const PLAYER_X_OFFSET = 120; // px from left edge where player stands
 const GRAVITY = 1800; // px/s²
-const JUMP_VELOCITY = -680; // px/s — single jump (clears ground obs)
-const JUMP2_VELOCITY = -580; // px/s — second jump (clears mid obs)
+const JUMP_VELOCITY = -720; // px/s — single jump (clears ground obs)
+const JUMP2_VELOCITY = -600; // px/s — second jump (clears mid obs)
 const SCROLL_SPEED_INITIAL = 380; // px/s
 const SCROLL_SPEED_MAX = 900; // px/s
 const SCROLL_ACCELERATION = 8; // px/s per second
@@ -16,16 +16,16 @@ const OBSTACLE_INTERVAL_MAX = 2200; // ms
 
 const PLAYER_W = 32;
 const PLAYER_H = 52;
-const PLAYER_H_CROUCH = 26; // half height when crouching
+// const PLAYER_H_CROUCH = 26; // half height when crouching
 
-const OBS_W = 32;
+const OBS_W = 48;
 const OBS_GROUND_H = 48; // sits on ground
 const OBS_MID_W = 52; // wider floating block
-const OBS_MID_H = 32;
+const OBS_MID_H = 52;
 const OBS_TOP_W = 64;
-const OBS_TOP_H = 28;
-const OBS_MID_Y_OFFSET = 210; // px above groundY  → groundY - 210
-const OBS_TOP_Y_OFFSET = 260; // px above groundY  → groundY - 260 (double jump reaches here)
+const OBS_TOP_H = 64;
+const OBS_MID_Y_OFFSET = 160; // px above groundY  → groundY - 210
+const OBS_TOP_Y_OFFSET = 240; // px above groundY  → groundY - 260 (double jump reaches here)
 
 type BgLayerDef = { key: string; parallax: number; depth: number };
 const BG_LAYER_DEFS: BgLayerDef[] = [
@@ -77,6 +77,48 @@ const DECO_CATEGORIES: DecoCategory[] = [
     minGap: 1500,
     maxGap: 3500,
     allowOverlap: true,
+  },
+];
+
+type ObstacleType = {
+  key: string; // base texture key (used for the create() call)
+  animKey?: string; // animation to play on spawn, if this obstacle animates
+  isFlipping?: boolean; // if true, randomly flip X on spawn for variety
+  width: number;
+  height: number;
+  scale: number; // optional visual scale factor (default 1)
+  getY: (groundY: number) => number;
+  weight: number; // relative chance (must sum however you like, we'll normalize)
+};
+const OBSTACLE_TYPES: ObstacleType[] = [
+  {
+    key: "enemy_ground_idle",
+    animKey: "enemy_ground_idle",
+    isFlipping: true,
+    width: OBS_W,
+    height: OBS_GROUND_H,
+    getY: (groundY) => groundY - OBS_GROUND_H / 4,
+    weight: 0.5,
+    scale: 3.5,
+  },
+  {
+    key: "enemy_mid_attack",
+    animKey: "enemy_mid_attack",
+    isFlipping: true,
+    width: OBS_MID_W,
+    height: OBS_MID_H,
+    getY: (groundY) => groundY - OBS_MID_Y_OFFSET,
+    weight: 0.3,
+    scale: 4,
+  },
+  {
+    key: "enemy_top_fly",
+    animKey: "enemy_top_fly",
+    width: OBS_TOP_W,
+    height: OBS_TOP_H,
+    getY: (groundY) => groundY - OBS_TOP_Y_OFFSET,
+    weight: 0.2,
+    scale: 3,
   },
 ];
 
@@ -379,34 +421,93 @@ export default class GameScene extends BaseScene {
 
   private buildObstacleGroup() {
     // Ground obstacle texture
-    if (!this.textures.exists("obs_ground")) {
+    if (!this.textures.exists("enemy_ground_idle")) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.setVisible(false);
       gfx.fillStyle(0xff4444);
       gfx.fillRect(0, 0, OBS_W, OBS_GROUND_H);
-      gfx.generateTexture("obs_ground", OBS_W, OBS_GROUND_H);
+      gfx.generateTexture("enemy_ground_idle", OBS_W, OBS_GROUND_H);
       gfx.destroy();
     }
+    if (!this.anims.exists("enemy_ground_idle")) {
+      this.anims.create({
+        key: "enemy_ground_idle",
+        frames: this.anims.generateFrameNumbers("enemy_ground_idle", {
+          start: 0,
+          end: 5,
+        }),
+        frameRate: 12,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists("enemy_ground_attack")) {
+      this.anims.create({
+        key: "enemy_ground_attack",
+        frames: this.anims.generateFrameNumbers("enemy_ground_attack", {
+          start: 0,
+          end: 5,
+        }),
+        frameRate: 12,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists("enemy_ground_walk")) {
+      this.anims.create({
+        key: "enemy_ground_walk",
+        frames: this.anims.generateFrameNumbers("enemy_ground_walk", {
+          start: 0,
+          end: 7,
+        }),
+        frameRate: 16,
+        repeat: -1,
+      });
+    }
+
     // Mid floating obstacle texture (orange tint — different danger signal)
-    if (!this.textures.exists("obs_mid")) {
+    if (!this.textures.exists("enemy_mid_attack")) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.setVisible(false);
       gfx.fillStyle(0xff8800);
       gfx.fillRect(0, 0, OBS_MID_W, OBS_MID_H);
-      gfx.generateTexture("obs_mid", OBS_MID_W, OBS_MID_H);
+      gfx.generateTexture("enemy_mid_attack", OBS_MID_W, OBS_MID_H);
       gfx.destroy();
     }
+    if (!this.anims.exists("enemy_mid_attack")) {
+      this.anims.create({
+        key: "enemy_mid_attack",
+        frames: this.anims.generateFrameNumbers("enemy_mid_attack", {
+          start: 0,
+          end: 5,
+        }),
+        frameRate: 12,
+        repeat: -1,
+      });
+    }
+
     // Top floating obstacle texture (yellow — highest threat)
-    if (!this.textures.exists("obs_top")) {
+    if (!this.textures.exists("enemy_top_fly")) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.setVisible(false);
       gfx.fillStyle(0xffdd00);
       gfx.fillRect(0, 0, OBS_TOP_W, OBS_TOP_H);
-      gfx.generateTexture("obs_top", OBS_TOP_W, OBS_TOP_H);
+      gfx.generateTexture("enemy_top_fly", OBS_TOP_W, OBS_TOP_H);
       gfx.destroy();
     }
+    if (!this.anims.exists("enemy_top_fly")) {
+      this.anims.create({
+        key: "enemy_top_fly",
+        frames: this.anims.generateFrameNumbers("enemy_top_fly", {
+          start: 0,
+          end: 2,
+        }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
 
-    this.obstacles = this.physics.add.group();
+    this.obstacles = this.physics.add.group({
+      classType: Physics.Arcade.Sprite, // 👈 needed so obs.play() works
+    });
 
     this.physics.add.overlap(this.player, this.obstacles, () => {
       this.triggerGameOver();
@@ -439,42 +540,37 @@ export default class GameScene extends BaseScene {
 
     // Weighted random: 50% ground, 30% mid, 20% top
     const roll = window.Math.random();
-    let texKey: string;
-    let obsY: number;
-    let obsW: number;
-    let obsH: number;
+    let cumulative = 0;
+    let type = OBSTACLE_TYPES[OBSTACLE_TYPES.length - 1]; // fallback
 
-    if (roll < 0.5) {
-      // Ground obstacle — jump over it
-      texKey = "obs_ground";
-      obsW = OBS_W;
-      obsH = OBS_GROUND_H;
-      obsY = this.groundY - obsH / 2;
-    } else if (roll < 0.8) {
-      // Mid floating — double jump or crouch under it
-      texKey = "obs_mid";
-      obsW = OBS_MID_W;
-      obsH = OBS_MID_H;
-      obsY = this.groundY - OBS_MID_Y_OFFSET;
-    } else {
-      // Top floating — must crouch (double jump will hit it)
-      texKey = "obs_top";
-      obsW = OBS_TOP_W;
-      obsH = OBS_TOP_H;
-      obsY = this.groundY - OBS_TOP_Y_OFFSET;
+    for (const t of OBSTACLE_TYPES) {
+      cumulative += t.weight;
+      if (roll < cumulative) {
+        type = t;
+        break;
+      }
     }
 
     const obs = this.obstacles.create(
-      width + obsW,
-      obsY,
-      texKey,
-    ) as Physics.Arcade.Image;
+      width + type.width,
+      type.getY(this.groundY),
+      type.key,
+    ) as Physics.Arcade.Sprite;
 
     obs.setImmovable(true);
+    obs.setFlipX(type.isFlipping ?? false);
     obs.setDepth(2);
+    obs.setDisplaySize(type.width * type.scale, type.height * type.scale);
+    obs.setOrigin(0.5);
+
     if (obs.body) {
-      (obs.body as Physics.Arcade.Body).allowGravity = false;
-      (obs.body as Physics.Arcade.Body).setSize(obsW, obsH);
+      const body = obs.body as Physics.Arcade.Body;
+      body.allowGravity = false;
+      body.setSize(type.width / obs.scaleX, type.height / obs.scaleY);
+    }
+
+    if (type.animKey && this.anims.exists(type.animKey)) {
+      obs.play(type.animKey);
     }
   }
 
@@ -499,21 +595,21 @@ export default class GameScene extends BaseScene {
     }
   }
 
-  private crouchDown() {
-    if (this.isGameOver) return;
-    if (this.isCrouching) return;
-    this.isCrouching = true;
+  // private crouchDown() {
+  //   if (this.isGameOver) return;
+  //   if (this.isCrouching) return;
+  //   this.isCrouching = true;
 
-    // NEVER use setScale on a physics sprite in Phaser 4 — it scales the
-    // body dimensions too, shrinking the body to 13px instead of 26px.
-    // Only resize the physics body and use setOffset to keep feet at groundY.
-    // With center origin: body bottom = sprite.y + bodyH/2.
-    // After setSize to PLAYER_H_CROUCH (26), bottom rises by (52-26)/2 = 13px.
-    // setOffset(0, 13) shifts body down 13px, restoring bottom to groundY.
-    const diff = (PLAYER_H - PLAYER_H_CROUCH) / 2; // = 13
-    this.player.body.setSize(PLAYER_W, PLAYER_H_CROUCH);
-    this.player.body.setOffset(0, diff);
-  }
+  //   // NEVER use setScale on a physics sprite in Phaser 4 — it scales the
+  //   // body dimensions too, shrinking the body to 13px instead of 26px.
+  //   // Only resize the physics body and use setOffset to keep feet at groundY.
+  //   // With center origin: body bottom = sprite.y + bodyH/2.
+  //   // After setSize to PLAYER_H_CROUCH (26), bottom rises by (52-26)/2 = 13px.
+  //   // setOffset(0, 13) shifts body down 13px, restoring bottom to groundY.
+  //   const diff = (PLAYER_H - PLAYER_H_CROUCH) / 2; // = 13
+  //   this.player.body.setSize(PLAYER_W, PLAYER_H_CROUCH);
+  //   this.player.body.setOffset(0, diff);
+  // }
 
   private standUp() {
     if (!this.isCrouching) return;
@@ -553,7 +649,7 @@ export default class GameScene extends BaseScene {
     this.input.keyboard!.on("keyup", onKeyUp);
 
     // Touch: tap upper half = jump, tap lower half = crouch
-    this.input.on("pointerdown", (ptr: Input.Pointer) => {
+    this.input.on("pointerdown", (_ptr: Input.Pointer) => {
       this.tryJump();
       // if (ptr.y < this.scale.height / 2) this.tryJump();
       // else this.crouchDown();

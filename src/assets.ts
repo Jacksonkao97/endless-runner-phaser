@@ -86,6 +86,36 @@ export const spritesheets: spriteSheet[] = [
     frameWidth: 80,
     frameHeight: 64,
   },
+  {
+    key: "enemy_ground_walk",
+    path: "assets/images/enemy/Orc-Walk.png",
+    frameWidth: 100,
+    frameHeight: 100,
+  },
+  {
+    key: "enemy_ground_attack",
+    path: "assets/images/enemy/Orc-Attack01.png",
+    frameWidth: 100,
+    frameHeight: 100,
+  },
+  {
+    key: "enemy_ground_idle",
+    path: "assets/images/enemy/Orc-Idle.png",
+    frameWidth: 100,
+    frameHeight: 100,
+  },
+  {
+    key: "enemy_top_fly",
+    path: "assets/images/enemy/demo_lugia-Sheet.png",
+    frameWidth: 208,
+    frameHeight: 208,
+  },
+  {
+    key: "enemy_mid_attack",
+    path: "assets/images/enemy/eye_ball_attack.png",
+    frameWidth: 150,
+    frameHeight: 150,
+  },
 ];
 
 export const audio = [{ key: "bgm", path: "assets/audio/bgm_1.mp3" }];

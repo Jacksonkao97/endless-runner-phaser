@@ -97,6 +97,12 @@ export default class CreditsScene extends BaseScene {
           "Zerie",
           "16-bit Character & Monster Pack",
           "itch.io",
+          "ShinobuGaen",
+          "Demo_lugio Pack",
+          "itch.io",
+          "LuizMelo",
+          "Monsters Creatures Fantasy Pack",
+          "itch.io",
         ],
       },
       {
