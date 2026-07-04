@@ -1,8 +1,13 @@
 import { AUTO, Game } from "phaser";
 import WebFont from "webfontloader";
-import BootScene from "./scenes/Boot";
-import GameScene from "./scenes/Game";
-import PreloadScene from "./scenes/Preload";
+import BootScene from "./scenes/BootScene";
+import CreditsScene from "./scenes/CreditsScene";
+import GameOverScene from "./scenes/GameOverScene";
+import GameScene from "./scenes/GameScene";
+import LeaderboardScene from "./scenes/LeaderboardScene";
+import MenuScene from "./scenes/MenuScene";
+import PreloadScene from "./scenes/PreloadScene";
+import SettingsScene from "./scenes/SettingsScene";
 import "./style.css";
 
 WebFont.load({
@@ -13,10 +18,29 @@ WebFont.load({
     new Game({
       type: AUTO,
       width: 800,
-      height: 400,
-      backgroundColor: "#535353",
+      height: 600,
+      backgroundColor: "#4d4d4d",
+      render: {
+        powerPreference: "high-performance",
+      },
       parent: "game",
-      scene: [BootScene, PreloadScene, GameScene],
+      physics: {
+        default: "arcade",
+        arcade: {
+          gravity: { x: 0, y: 0 },
+          debug: false,
+        },
+      },
+      scene: [
+        BootScene,
+        PreloadScene,
+        MenuScene,
+        LeaderboardScene,
+        CreditsScene,
+        SettingsScene,
+        GameScene,
+        GameOverScene,
+      ],
     });
   },
 });
