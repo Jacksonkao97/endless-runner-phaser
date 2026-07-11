@@ -1,6 +1,6 @@
-import { AUTO, Game } from "phaser";
+// main.ts
+import { AUTO, Game, Scale } from "phaser";
 import WebFont from "webfontloader";
-import BootScene from "./scenes/BootScene";
 import CreditsScene from "./scenes/CreditsScene";
 import GameOverScene from "./scenes/GameOverScene";
 import GameScene from "./scenes/GameScene";
@@ -24,6 +24,16 @@ WebFont.load({
         powerPreference: "high-performance",
       },
       parent: "game",
+      scale: {
+        mode: Scale.FIT,
+        autoCenter: Scale.CENTER_BOTH,
+        width: 800,
+        height: 600,
+        max: {
+          width: 1600,
+          height: 1200,
+        },
+      },
       physics: {
         default: "arcade",
         arcade: {
@@ -32,7 +42,6 @@ WebFont.load({
         },
       },
       scene: [
-        BootScene,
         PreloadScene,
         MenuScene,
         LeaderboardScene,

@@ -1,13 +1,24 @@
-* {
-  box-sizing: border-box;
-  padding: 0;
+html,
+body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000; /* letterbox bars color */
 }
 
-body {
-  background: #000;
+#game {
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+}
+
+#game canvas {
+  /* Phaser sets width/height inline via FIT mode; this just avoids
+     any stray inline-block gap under the canvas */
+  display: block;
+  margin: 0 !important;
 }
