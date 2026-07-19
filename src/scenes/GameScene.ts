@@ -9,10 +9,12 @@ const GRAVITY = 1800; // px/s²
 const JUMP_VELOCITY = -720; // px/s — single jump (clears ground obs)
 const JUMP2_VELOCITY = -600; // px/s — second jump (clears mid obs)
 const SCROLL_SPEED_INITIAL = 380; // px/s
-const SCROLL_SPEED_MAX = 900; // px/s
 const SCROLL_ACCELERATION = 8; // px/s per second
 const OBSTACLE_INTERVAL_MIN = 900; // ms
 const OBSTACLE_INTERVAL_MAX = 2200; // ms
+const OBSTACLE_INTERVAL_MIN_FLOOR = 400; // ms — tightest gap at max difficulty
+const OBSTACLE_INTERVAL_MAX_FLOOR = 900; // ms
+const DIFFICULTY_SCORE_SCALE = 3000; // score at which difficulty curve maxes out
 
 const PLAYER_W = 32;
 const PLAYER_H = 52;
@@ -142,6 +144,7 @@ export default class GameScene extends BaseScene {
 
   private scoreText!: GameObjects.Text;
   private obstacleTimer!: Time.TimerEvent;
+  private startTimestamp = 0;
 
   constructor() {
     super("Game");
@@ -157,6 +160,7 @@ export default class GameScene extends BaseScene {
     this.scrollSpeed = SCROLL_SPEED_INITIAL;
     this.groundY = height - GROUND_Y_OFFSET;
     this.bgLayers = [];
+    this.startTimestamp = Date.now();
 
     this.buildBackground(width, height);
     this.buildGround(width, height);
@@ -175,10 +179,7 @@ export default class GameScene extends BaseScene {
   update(_time: number, delta: number) {
     if (this.isGameOver) return;
 
-    this.scrollSpeed = window.Math.min(
-      this.scrollSpeed + SCROLL_ACCELERATION * (delta / 1000),
-      SCROLL_SPEED_MAX,
-    );
+    this.scrollSpeed += SCROLL_ACCELERATION * (delta / 1000);
 
     // Scroll parallax bg tile layers
     this.bgLayers.forEach((layer) => {
@@ -214,6 +215,7 @@ export default class GameScene extends BaseScene {
     if (onGround && !this.isOnGround) {
       this.jumpCount = 0;
       if (!this.isCrouching) this.standUp();
+      this.playSfx("sfx_land");
       this.player.play("run");
     }
     this.isOnGround = onGround;
@@ -526,7 +528,19 @@ export default class GameScene extends BaseScene {
   }
 
   private scheduleObstacle() {
-    const delay = Math.Between(OBSTACLE_INTERVAL_MIN, OBSTACLE_INTERVAL_MAX);
+    const progress = Math.Clamp(this.score / DIFFICULTY_SCORE_SCALE, 0, 1);
+    const intervalMin = Math.Linear(
+      OBSTACLE_INTERVAL_MIN,
+      OBSTACLE_INTERVAL_MIN_FLOOR,
+      progress,
+    );
+    const intervalMax = Math.Linear(
+      OBSTACLE_INTERVAL_MAX,
+      OBSTACLE_INTERVAL_MAX_FLOOR,
+      progress,
+    );
+
+    const delay = Math.Between(intervalMin, intervalMax);
     this.obstacleTimer = this.time.delayedCall(delay, () => {
       if (!this.isGameOver) {
         this.spawnObstacle();
@@ -582,14 +596,14 @@ export default class GameScene extends BaseScene {
       // First jump
       this.player.setVelocityY(JUMP_VELOCITY);
       this.jumpCount = 1;
-      // this.playSfx("sfx_jump");
+      this.playSfx("sfx_jump");
       this.player.play("jump");
       this.player.chain("fall");
     } else if (!this.isOnGround && this.jumpCount === 1) {
       // Double jump
       this.player.setVelocityY(JUMP2_VELOCITY);
       this.jumpCount = 2;
-      // this.playSfx("sfx_jump");
+      this.playSfx("sfx_double_jump");
       this.player.play("jump");
       this.player.chain("fall");
     }
@@ -673,14 +687,22 @@ export default class GameScene extends BaseScene {
     if (this.isGameOver) return;
     this.isGameOver = true;
 
+    const durationSeconds = window.Math.round(
+      (Date.now() - this.startTimestamp) / 1000,
+    );
+
     this.obstacles.getChildren().forEach((obj) => {
       (obj as Physics.Arcade.Image).setActive(false);
     });
 
+    this.playSfx("sfx_death");
     this.player.play("dead");
     this.player.once("animationcomplete-dead", () => {
       this.time.delayedCall(500, () => {
-        this.scene.start("GameOver", { score: Math.FloorTo(this.score) });
+        this.scene.start("GameOver", {
+          score: Math.FloorTo(this.score),
+          duration: durationSeconds,
+        });
       });
     });
   }

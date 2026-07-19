@@ -24,6 +24,13 @@ export default {
   "leaderboard.rank": "排名",
   "leaderboard.player": "玩家",
   "leaderboard.score": "分数",
+  "leaderboard.loading": "加载分数中...",
+  "leaderboard.loadError": "加载排行榜失败，请稍后再试。",
+  "leaderboard.empty": "还没有分数 — 成为第一个！",
+  "leaderboard.colName": "名字",
+  "leaderboard.colScore": "分数",
+  "leaderboard.colDuration": "用时",
+  "leaderboard.back": "← 返回主菜单",
 
   // Game HUD
   "game.score": "分数",
@@ -43,4 +50,13 @@ export default {
   "gameover.retry": "再玩一次",
   "gameover.menu": "主菜单",
   "gameover.hint": "[ R ] 重试  ·  [ ESC ] 菜单",
+  "gameover.enterName": "你的名字",
+  "gameover.enterNamePrompt": "请输入你的名字（最多20个字符）",
+  "gameover.tapToEnterName": "点击输入名字",
+  "gameover.submitScore": "提交分数",
+  "gameover.submitting": "提交中...",
+  "gameover.submitted": "✓ 已提交",
+  "gameover.viewLeaderboard": "查看排行榜",
+  "gameover.submitFailed": "提交失败 — 点击重试",
+  "gameover.enterNamePlaceholder": "点击输入名字",
 } as const;

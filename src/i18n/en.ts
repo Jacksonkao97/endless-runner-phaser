@@ -24,6 +24,13 @@ export default {
   "leaderboard.rank": "Rank",
   "leaderboard.player": "Player",
   "leaderboard.score": "Score",
+  "leaderboard.loading": "Loading scores...",
+  "leaderboard.loadError": "Failed to load leaderboard. Try again later.",
+  "leaderboard.empty": "No scores yet — be the first!",
+  "leaderboard.colName": "NAME",
+  "leaderboard.colScore": "SCORE",
+  "leaderboard.colDuration": "TIME",
+  "leaderboard.back": "← Back to Menu",
 
   // Game HUD (scaffold for later)
   "game.score": "Score",
@@ -43,4 +50,13 @@ export default {
   "gameover.retry": "Play Again",
   "gameover.menu": "Main Menu",
   "gameover.hint": "[ R ] RETRY  ·  [ ESC ] MENU",
+  "gameover.enterName": "YOUR NAME",
+  "gameover.enterNamePrompt": "Enter your name (max 20 characters)",
+  "gameover.tapToEnterName": "Tap to enter name",
+  "gameover.submitScore": "SUBMIT SCORE",
+  "gameover.submitting": "SUBMITTING...",
+  "gameover.submitted": "✓ SUBMITTED",
+  "gameover.viewLeaderboard": "VIEW LEADERBOARD",
+  "gameover.submitFailed": "SUBMIT FAILED — TAP TO RETRY",
+  "gameover.enterNamePlaceholder": "Tap to enter name",
 } as const;

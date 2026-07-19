@@ -10,6 +10,11 @@ type spriteSheet = {
   frameHeight: number;
 };
 
+type audio = {
+  key: string;
+  path: string;
+};
+
 export const images: image[] = [
   {
     key: "bg_sky",
@@ -118,4 +123,10 @@ export const spritesheets: spriteSheet[] = [
   },
 ];
 
-export const audio = [{ key: "bgm", path: "assets/audio/bgm_1.mp3" }];
+export const audio: audio[] = [
+  { key: "bgm", path: "assets/audio/bgm_1.mp3" },
+  { key: "sfx_jump", path: "assets/audio/jump_1.mp3" },
+  { key: "sfx_double_jump", path: "assets/audio/jump_1.mp3" },
+  { key: "sfx_land", path: "assets/audio/landing_1.mp3" },
+  { key: "sfx_death", path: "assets/audio/dead_1.mp3" },
+];
