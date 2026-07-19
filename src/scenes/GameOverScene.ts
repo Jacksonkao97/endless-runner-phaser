@@ -1,10 +1,11 @@
 import { t } from "../i18n";
+import { submitScore } from "../services/leaderboard";
 import Settings from "../settings";
 import { BaseScene } from "./BaseScene";
 
 export default class GameOverScene extends BaseScene {
   private keyboardActive = true;
-  private selectedIndex = 0;
+  private playerName = "";
 
   constructor() {
     super("GameOver");
@@ -15,10 +16,13 @@ export default class GameOverScene extends BaseScene {
     const centerX = width / 2;
     const centerY = height / 2;
     this.keyboardActive = true;
-    this.selectedIndex = 0;
+    this.playerName = "";
 
-    // ── Score from GameScene ──────────────────────────────────────────────────
-    const { score = 0 } = this.scene.settings.data as { score?: number };
+    // ── Score & duration from GameScene ─────────────────────────────────────
+    const { score = 0, duration = 0 } = this.scene.settings.data as {
+      score?: number;
+      duration?: number;
+    };
 
     // ── Best score (localStorage) ─────────────────────────────────────────────
     const bestKey = "endless_runner_best";
@@ -109,23 +113,203 @@ export default class GameOverScene extends BaseScene {
     // ── Divider ───────────────────────────────────────────────────────────────
     this.add.rectangle(centerX, centerY + 75, 260, 1, 0x333333).setDepth(1);
 
-    // ── Buttons ───────────────────────────────────────────────────────────────
-    const buttons = [
-      { label: t("gameover.retry"), action: () => this.scene.start("Game") },
-      { label: t("gameover.menu"), action: () => this.scene.start("Menu") },
-    ];
+    // ── Row layout ───────────────────────────────────────────────────────────
+    const ROW1_Y = centerY + 118;
+    const ROW2_Y = centerY + 168;
+    const ROW3_Y = centerY + 214;
+    const HINT_Y = centerY + 255;
 
-    const btnRefs = buttons.map((btn, i) =>
-      this.createButton(
+    // ── Nav state (rebuilt after submit) ────────────────────────────────────
+    let navItems: Phaser.GameObjects.Text[] = [];
+    let selectedIndex = 0;
+
+    const highlightNav = () => {
+      navItems.forEach((item, i) =>
+        item.setColor(i === selectedIndex ? "#ffffff" : "#aaaaaa"),
+      );
+    };
+
+    // Generic button builder — highlight lookup is dynamic via navItems.indexOf,
+    // so it stays correct even after row 1 is rebuilt post-submit.
+    const buildButton = (
+      x: number,
+      y: number,
+      label: string,
+      onClick: () => void,
+    ) => {
+      const btn = this.add
+        .text(x, y, label, {
+          fontSize: "20px",
+          color: "#aaaaaa",
+          fontFamily: "Black Ops One",
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(1);
+
+      btn.on("pointerover", () => {
+        const idx = navItems.indexOf(btn);
+        if (idx !== -1) selectedIndex = idx;
+        highlightNav();
+      });
+      btn.on("pointerout", () => {
+        highlightNav();
+      });
+      btn.on("pointerdown", () => btn.setColor("#f26500"));
+      btn.on("pointerup", () => {
+        btn.setColor("#ffffff");
+        onClick();
+      });
+
+      return btn;
+    };
+
+    // ── Row 1: name box + submit ────────────────────────────────────────────
+    const NAME_BOX_X = centerX - 75;
+    const NAME_BOX_W = 165;
+    const SUBMIT_X = centerX + 110;
+
+    let nameBoxBg: Phaser.GameObjects.Rectangle | null = null;
+    let nameText: Phaser.GameObjects.Text | null = null;
+    let submitBtn: Phaser.GameObjects.Text | null = null;
+    let viewLeaderboardBtn: Phaser.GameObjects.Text | null = null;
+    let loadingText: Phaser.GameObjects.Text | null = null;
+
+    const nameLabel = () =>
+      this.playerName ? this.playerName : t("gameover.enterNamePlaceholder");
+
+    const buildRow1Input = () => {
+      nameBoxBg = this.add
+        .rectangle(NAME_BOX_X, ROW1_Y, NAME_BOX_W, 38, 0x111111)
+        .setStrokeStyle(1, 0x333333)
+        .setDepth(0.5);
+
+      nameText = buildButton(NAME_BOX_X, ROW1_Y, nameLabel(), () =>
+        promptForName(),
+      );
+      nameText.setFontSize(15);
+      nameText.setColor(this.playerName ? "#ffffff" : "#666666");
+
+      submitBtn = buildButton(SUBMIT_X, ROW1_Y, t("gameover.submitScore"), () =>
+        handleSubmit(),
+      );
+
+      navItems = [nameText, submitBtn, playAgainBtn, menuBtn];
+      selectedIndex = 0;
+      highlightNav();
+    };
+
+    const destroyRow1Input = () => {
+      nameBoxBg?.destroy();
+      nameText?.destroy();
+      submitBtn?.destroy();
+      nameBoxBg = null;
+      nameText = null;
+      submitBtn = null;
+    };
+
+    const buildViewLeaderboardButton = () => {
+      viewLeaderboardBtn = buildButton(
         centerX,
-        centerY + 115 + i * 46,
-        btn.label,
-        btn.action,
-        i,
-      ),
+        ROW1_Y,
+        t("gameover.viewLeaderboard"),
+        () => this.scene.start("Leaderboard"),
+      );
+      navItems = [viewLeaderboardBtn, playAgainBtn, menuBtn];
+      selectedIndex = 0;
+      highlightNav();
+    };
+
+    // ── Row 2 & 3: always-present buttons ───────────────────────────────────
+    const playAgainBtn = buildButton(centerX, ROW2_Y, t("gameover.retry"), () =>
+      this.scene.start("Game"),
+    );
+    const menuBtn = buildButton(centerX, ROW3_Y, t("gameover.menu"), () =>
+      this.scene.start("Menu"),
     );
 
-    this.highlightButtons(btnRefs, this.selectedIndex);
+    buildRow1Input();
+
+    // ── Name entry + submit logic ───────────────────────────────────────────
+    const promptForName = () => {
+      const input = window.prompt(
+        t("gameover.enterNamePrompt"),
+        this.playerName,
+      );
+      if (input !== null) {
+        this.playerName = input.trim().slice(0, 20);
+        if (nameText) {
+          nameText.setText(nameLabel());
+          nameText.setColor(this.playerName ? "#ffffff" : "#666666");
+        }
+      }
+    };
+
+    const setRowsVisible = (visible: boolean) => {
+      [playAgainBtn, menuBtn].forEach((btn) => {
+        btn.setVisible(visible);
+        if (visible) btn.setInteractive({ useHandCursor: true });
+        else btn.disableInteractive();
+      });
+    };
+
+    const showLoading = () => {
+      this.keyboardActive = false;
+      destroyRow1Input();
+      setRowsVisible(false);
+      loadingText = this.add
+        .text(centerX, ROW1_Y, t("gameover.submitting"), {
+          fontSize: "16px",
+          color: "#888888",
+          fontFamily: "Black Ops One",
+        })
+        .setOrigin(0.5)
+        .setDepth(1);
+
+      this.tweens.add({
+        targets: loadingText,
+        alpha: { from: 0.4, to: 1 },
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    };
+
+    const hideLoading = (success: boolean) => {
+      loadingText?.destroy();
+      loadingText = null;
+      setRowsVisible(true);
+      this.keyboardActive = true;
+
+      if (success) {
+        buildViewLeaderboardButton();
+      } else {
+        buildRow1Input();
+      }
+    };
+
+    const handleSubmit = () => {
+      if (!this.playerName.trim()) {
+        promptForName();
+        if (!this.playerName.trim()) return;
+      }
+
+      showLoading();
+
+      submitScore({
+        name: this.playerName.trim(),
+        score,
+        duration,
+      })
+        .then(() => {
+          hideLoading(true);
+        })
+        .catch(() => {
+          hideLoading(false);
+          if (nameText) nameText.setColor("#ff6666");
+        });
+    };
 
     // ── Keyboard nav ──────────────────────────────────────────────────────────
     const onKeyDown = (e: KeyboardEvent) => {
@@ -135,21 +319,21 @@ export default class GameOverScene extends BaseScene {
         case "ArrowUp":
         case "w":
         case "W":
-          this.selectedIndex =
-            (this.selectedIndex - 1 + buttons.length) % buttons.length;
-          this.highlightButtons(btnRefs, this.selectedIndex);
+          selectedIndex =
+            (selectedIndex - 1 + navItems.length) % navItems.length;
+          highlightNav();
           break;
 
         case "ArrowDown":
         case "s":
         case "S":
-          this.selectedIndex = (this.selectedIndex + 1) % buttons.length;
-          this.highlightButtons(btnRefs, this.selectedIndex);
+          selectedIndex = (selectedIndex + 1) % navItems.length;
+          highlightNav();
           break;
 
         case " ":
         case "Enter":
-          btnRefs[this.selectedIndex].emit("pointerup");
+          navItems[selectedIndex]?.emit("pointerup");
           break;
 
         case "r":
@@ -171,7 +355,7 @@ export default class GameOverScene extends BaseScene {
 
     // ── Keyboard hint ─────────────────────────────────────────────────────────
     this.add
-      .text(centerX, centerY + 220, t("gameover.hint"), {
+      .text(centerX, HINT_Y, t("gameover.hint"), {
         fontSize: "12px",
         color: "#444444",
         fontFamily: "Black Ops One",
@@ -181,47 +365,5 @@ export default class GameOverScene extends BaseScene {
       .setDepth(1);
 
     this.applyContrast(Settings.load().contrast);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  private createButton(
-    x: number,
-    y: number,
-    label: string,
-    onClick: () => void,
-    index: number,
-  ) {
-    const btn = this.add
-      .text(x, y, label, {
-        fontSize: "22px",
-        color: "#aaaaaa",
-        fontFamily: "Black Ops One",
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(1);
-
-    btn.on("pointerover", () => {
-      this.selectedIndex = index;
-      btn.setColor("#ffffff");
-    });
-    btn.on("pointerout", () => btn.setColor("#aaaaaa"));
-    btn.on("pointerdown", () => btn.setColor("#f26500"));
-    btn.on("pointerup", () => {
-      btn.setColor("#ffffff");
-      onClick();
-    });
-
-    return btn;
-  }
-
-  private highlightButtons(
-    btns: Phaser.GameObjects.Text[],
-    activeIndex: number,
-  ) {
-    btns.forEach((b, i) =>
-      b.setColor(i === activeIndex ? "#ffffff" : "#aaaaaa"),
-    );
   }
 }

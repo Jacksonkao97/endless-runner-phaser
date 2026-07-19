@@ -131,6 +131,15 @@ Jackson Kao
 - ShinobuGaen — Demo_lugio Pack (itch.io)
 - LuizMelo — Monsters Creatures Fantasy Pack (itch.io)
 
+### Sound Effects — Pixabay
+
+Sound effects sourced from [Pixabay](https://pixabay.com) contributors:
+`freesound_community`, `jofae`, `u_qqkrn9bn55`.
+
+Pixabay Content License summary: free to use and modify, no attribution
+required (though credit is appreciated). Full terms:
+<https://pixabay.com/service/license-summary/>
+
 **Music**
 Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — see in-game credits for full attribution.
 

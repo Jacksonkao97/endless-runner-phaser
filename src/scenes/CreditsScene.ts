@@ -88,6 +88,19 @@ export default class CreditsScene extends BaseScene {
         ],
       },
       {
+        label: "SOUND EFFECTS",
+        lines: [
+          "freesound_community",
+          "via Pixabay",
+          "",
+          "jofae",
+          "via Pixabay",
+          "",
+          "u_qqkrn9bn55",
+          "via Pixabay",
+        ],
+      },
+      {
         label: "ART & ASSETS",
         lines: [
           "GandalfHardcore",
