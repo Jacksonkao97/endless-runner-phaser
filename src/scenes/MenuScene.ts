@@ -58,7 +58,7 @@ export default class MenuScene extends BaseScene {
             t("menu.exit.confirm"),
             () =>
               window.open(
-                "https://github.com/yourusername/endless-runner",
+           "https://github.com/Jacksonkao97/endless-runner-phaser",
                 "_blank",
               ),
             () => {}, // do nothing on No,
