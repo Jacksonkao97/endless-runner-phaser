@@ -14,7 +14,7 @@ npx tsc            # type-check only (noEmit)
 
 There is no test suite and no linter. `npm run build` is the verification step: CI runs exactly that, and the strict tsconfig (`noUnusedLocals`, `noUnusedParameters`) fails the build on unused code. Prefix intentionally unused parameters with `_`.
 
-Deployment is automatic: pushing to `main` runs `.github/workflows/deploy.yml`, which builds and publishes `dist/` to GitHub Pages. The README mentions `npm run deploy`, but that script does not exist.
+Deployment is automatic: pushing to `main` runs `.github/workflows/deploy.yml` (Node 22), which builds and publishes `dist/` to GitHub Pages. There is no deploy script.
 
 ## Architecture
 
@@ -26,19 +26,26 @@ Phaser 4 + TypeScript + Vite, a single-page 2D endless runner with a Firebase Fi
 
 The scenes are registered in order in `main.ts`, and each one has a string key passed to `super(...)`:
 `Preload` → `Menu` → {`Game`, `Leaderboard`, `Settings`, `Credits`}; `Game` → `GameOver` → {`Game`, `Menu`, `Leaderboard`}.
-Scenes switch with `this.scene.start(key, data?)`. For example, `GameScene` passes `{ score, duration }` to `GameOver`, which reads it from `this.scene.settings.data`. There is no `BootScene`; the README's project-structure section is out of date.
+Scenes switch with `this.scene.start(key, data?)`. For example, `GameScene` passes `{ score, duration }` to `GameOver`, which reads it from `this.scene.settings.data`. There is no `BootScene`.
 
 ### BaseScene conventions (`src/scenes/BaseScene.ts`)
 
 Every scene extends `BaseScene`, which provides:
-- `addFooter()`: shows the developer name and the version. The version comes from `__APP_VERSION__`, which `vite.config.ts` injects from `package.json`, so bumping the version in `package.json` updates the in-game display.
+- `addFooter(depth?)`: shows the developer name and the version. The version comes from `__APP_VERSION__`, which `vite.config.ts` injects from `package.json`, so bumping the version in `package.json` updates the in-game display.
 - `showConfirm(msg, onYes, onNo, onOpen?, onClose?)`: a modal dialog with its own keyboard handling. Scenes use `onOpen`/`onClose` to toggle a `keyboardActive` flag so their own menu navigation pauses while the dialog is open.
 - `playSfx(key)`: plays a sound at the persisted SFX volume.
 - `applyContrast(value)`: a black overlay at depth 999. **Every scene calls `this.applyContrast(Settings.load().contrast)` at the end of `create()`.** `SettingsScene.saveAndApply()` re-applies it to all active scenes.
 
 ### Input pattern
 
-Menus don't use Phaser key objects. They attach raw listeners with `this.input.keyboard!.on("keydown", (e: KeyboardEvent) => switch (e.key) ...)`, with WASD and arrow keys as aliases, and Space/Enter call `button.emit("pointerup")` so keyboard and pointer share one code path. Scenes are reused between visits, so listeners and timers must be removed in `this.events.once("shutdown", ...)` (see `GameScene.setupInput` and `GameOverScene`), and per-run state must be reset at the top of `create()`.
+Menus don't use Phaser key objects. They attach raw listeners with `this.input.keyboard!.on("keydown", (e: KeyboardEvent) => switch (e.key) ...)`, with WASD and arrow keys as aliases, and Space/Enter call `button.emit("pointerup")` so keyboard and pointer share one code path. Every screen should also be usable with only a pointer or touch.
+
+On shutdown, Phaser automatically clears listeners on `this.input` and `this.input.keyboard`, along with `this.time` timers and tweens. Some scenes also remove these by hand in `this.events.once("shutdown", ...)`. Phaser does **not** reset:
+- Scene instances, which are reused between visits. Reset per-run fields at the top of `create()`.
+- Module-level state, such as the mutable `DECO_CATEGORIES` objects in `GameScene`.
+- `this.scene.settings.data`, which keeps the last data that was passed in when a later `start()` passes none.
+
+Inside `create()`, `this.time.now` can be stale because the scene clock hasn't ticked yet. For delays, use `this.time.delayedCall`.
 
 ### Gameplay (`src/scenes/GameScene.ts`)
 
@@ -53,12 +60,12 @@ Menus don't use Phaser key objects. They attach raw listeners with `this.input.k
 
 ### Assets
 
-Asset files live in `public/assets/` and are registered in `src/assets.ts` (`images`, `spritesheets`, `audio`). `PreloadScene` loads everything in those lists, and it also waits at least 3 seconds for its progress animation. To add an asset, add an entry to `assets.ts` and reference it by key. Paths must stay **relative** (no leading `/`) so they resolve under the Vite `base` of `/endless-runner-phaser/`. `src/assets/` holds unused Vite template leftovers.
+Asset files live in `public/assets/` and are registered in `src/assets.ts` (`images`, `spritesheets`, `audio`). `PreloadScene` loads everything in those lists, and it also waits at least 3 seconds for its progress animation. To add an asset, add an entry to `assets.ts` and reference it by key. Paths must stay **relative** (no leading `/`) so they resolve under the Vite `base` of `/endless-runner-phaser/`.
 
 ### Persistence, settings, i18n
 
 - `src/settings.ts` stores `{ bgmVolume, sfxVolume, language, contrast }` in localStorage under the key `endless-runner-settings`. `Settings.load()` merges the saved values over the defaults. The best score is stored separately in `endless_runner_best` (`GameOverScene`).
-- `t(key)` (`src/i18n/index.ts`) reads the language from `Settings.load()` on every call and falls back to English. Its key type comes from `en.ts`, so a new key must be added to `en.ts` first and then to `zh.ts`. Text is resolved when a scene's `create()` runs, so changing the language calls `this.scene.restart()` to redraw the scene. To add a language, add a locale file, register it in `i18n/index.ts`, widen the `language` union in `settings.ts`, and add it to the dropdown in `SettingsScene.ts`.
+- `t(key)` (`src/i18n/index.ts`) reads the language from `Settings.load()` on every call and falls back to English. Its key type comes from `en.ts`, so a new key must be added to `en.ts` first and then to `zh.ts`. Text is resolved when a scene's `create()` runs, so changing the language calls `this.scene.restart()` to redraw the scene, and `restoreRow` keeps the keyboard focus on the same row. To add a language, add a locale file, register it in `i18n/index.ts`, widen the `language` union in `settings.ts`, and add it to the dropdown in `SettingsScene.ts`.
 - The BGM instance is shared across scenes: `MenuScene` reuses `this.sound.get("bgm")` if it exists instead of creating a second one, and `SettingsScene` adjusts its volume live.
 
 ### Leaderboard (Firebase)
