@@ -5,6 +5,7 @@ export default {
   "menu.leaderboard": "Leaderboard",
   "menu.settings": "Settings",
   "menu.exit": "Exit",
+  "menu.credits": "Credits",
   "menu.exit.confirm": "Want to check out\nthe source code?",
 
   // Settings
@@ -38,6 +39,11 @@ export default {
   "game.gameOver": "Game Over",
   "game.restart": "Restart",
   "game.backToMenu": "Back to Menu",
+
+  // Credits
+  "credits.title": "CREDITS",
+  "credits.back": "← Back",
+  "credits.hint": "[ ESC / BACKSPACE ] BACK  ·  [ ↑↓ ] SCROLL",
 
   // Shared
   "confirm.yes": "Yes",

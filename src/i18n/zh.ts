@@ -5,6 +5,7 @@ export default {
   "menu.leaderboard": "排行榜",
   "menu.settings": "设置",
   "menu.exit": "退出",
+  "menu.credits": "制作人员",
   "menu.exit.confirm": "想查看\n源代码吗？",
 
   // Settings
@@ -38,6 +39,11 @@ export default {
   "game.gameOver": "游戏结束",
   "game.restart": "重新开始",
   "game.backToMenu": "返回主菜单",
+
+  // Credits
+  "credits.title": "制作人员",
+  "credits.back": "← 返回",
+  "credits.hint": "[ ESC / BACKSPACE ] 返回  ·  [ ↑↓ ] 滚动",
 
   // Shared
   "confirm.yes": "是",

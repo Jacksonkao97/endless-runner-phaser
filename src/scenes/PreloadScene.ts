@@ -1,6 +1,8 @@
 import { audio, images, spritesheets } from "../assets";
 import { BaseScene } from "./BaseScene";
 
+const MIN_SPLASH_MS = 3000;
+
 const messages = [
   "Loading...",
   "Warming up...",
@@ -81,13 +83,26 @@ export default class PreloadScene extends BaseScene {
       }
     };
 
-    this.load.on("progress", (value: number) => {
+    // The bar shows the smaller of the real load progress and a timed
+    // progress, so it fills smoothly over at least MIN_SPLASH_MS but never
+    // runs ahead of the actual load.
+    let loadProgress = 0;
+    const timed = { progress: 0 };
+    const renderProgress = () => {
+      const value = Math.min(loadProgress, timed.progress);
       barFill.width = barWidth * value;
       pct.setText(`${Math.round(value * 100)}%`);
+    };
+
+    this.load.on("progress", (value: number) => {
+      loadProgress = value;
+      renderProgress();
     });
 
     this.load.on("complete", () => {
+      loadProgress = 1;
       assetsLoaded = true;
+      renderProgress();
       tryStart();
     });
 
@@ -99,21 +114,16 @@ export default class PreloadScene extends BaseScene {
 
     audio.forEach(({ key, path }) => this.load.audio(key, path));
 
-    // Remove when have real assets to load.
     this.tweens.add({
-      targets: barFill,
-      width: barWidth,
-      duration: 3000,
+      targets: timed,
+      progress: 1,
+      duration: MIN_SPLASH_MS,
       ease: "Sine.easeInOut",
-      onUpdate: () => {
-        const value = barFill.width / barWidth;
-        pct.setText(`${Math.round(value * 100)}%`);
+      onUpdate: renderProgress,
+      onComplete: () => {
+        minTimeDone = true;
+        tryStart();
       },
-    });
-
-    this.time.delayedCall(3000, () => {
-      minTimeDone = true;
-      tryStart();
     });
   }
 

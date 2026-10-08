@@ -312,8 +312,13 @@ export default class GameOverScene extends BaseScene {
     };
 
     // ── Keyboard nav ──────────────────────────────────────────────────────────
+    // Ignore keys briefly so a jump pressed just before dying doesn't
+    // immediately trigger the focused button (the name prompt).
+    let inputReady = false;
+    this.time.delayedCall(500, () => (inputReady = true));
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!this.keyboardActive) return;
+      if (!this.keyboardActive || !inputReady) return;
 
       switch (e.key) {
         case "ArrowUp":

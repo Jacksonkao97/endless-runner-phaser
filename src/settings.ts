@@ -2,14 +2,14 @@ export interface GameSettings {
   bgmVolume: number;
   sfxVolume: number;
   language: "en" | "zh";
-  contrast: number; // ← was boolean, now number
+  contrast: number; // 0–1; drives the darkening overlay in BaseScene
 }
 
 const DEFAULTS: GameSettings = {
   bgmVolume: 0.3,
   sfxVolume: 0.3,
   language: "en",
-  contrast: 0.5, // ← default midpoint
+  contrast: 0.5,
 };
 
 const KEY = "endless-runner-settings";

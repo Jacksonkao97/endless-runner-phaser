@@ -14,7 +14,7 @@ export default class SettingsScene extends BaseScene {
   private current!: GameSettings;
   private rows: SettingRow[] = [];
   private selectedRow = 0;
-  private keyboardActive = true;
+  private restoreRow = 0; // row to re-select after a language-change restart
 
   constructor() {
     super("Settings");
@@ -25,8 +25,8 @@ export default class SettingsScene extends BaseScene {
     const centerX = width / 2;
     const centerY = height / 2;
     this.rows = [];
-    this.selectedRow = 0;
-    this.keyboardActive = true;
+    this.selectedRow = this.restoreRow;
+    this.restoreRow = 0;
 
     this.current = Settings.load();
 
@@ -92,16 +92,7 @@ export default class SettingsScene extends BaseScene {
       onChange: (dir) => contrast.nudge(dir),
     });
 
-    const lang = this.addLanguageRow(
-      centerX,
-      centerY + 100,
-      () => {
-        this.keyboardActive = false;
-      },
-      () => {
-        this.keyboardActive = true;
-      },
-    );
+    const lang = this.addLanguageRow(centerX, centerY + 100);
     highlighters.push(lang.highlight);
     this.rows.push({
       type: "dropdown",
@@ -112,7 +103,7 @@ export default class SettingsScene extends BaseScene {
 
     // back row
     const back = this.add
-      .text(centerX, centerY + 180, "← Back", {
+      .text(centerX, centerY + 180, t("settings.back"), {
         fontSize: "16px",
         color: "#aaaaaa",
         fontFamily: "Black Ops One",
@@ -145,7 +136,38 @@ export default class SettingsScene extends BaseScene {
 
     // keyboard nav
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!this.keyboardActive) return;
+      // While the language dropdown is open, keys drive the dropdown.
+      if (lang.isOpen()) {
+        switch (e.key) {
+          case "ArrowUp":
+          case "w":
+          case "W":
+          case "ArrowLeft":
+          case "a":
+          case "A":
+            lang.move(-1);
+            break;
+
+          case "ArrowDown":
+          case "s":
+          case "S":
+          case "ArrowRight":
+          case "d":
+          case "D":
+            lang.move(1);
+            break;
+
+          case " ":
+          case "Enter":
+            lang.confirm();
+            break;
+
+          case "Escape":
+            lang.toggle();
+            break;
+        }
+        return;
+      }
 
       switch (e.key) {
         case "ArrowUp":
@@ -262,12 +284,7 @@ export default class SettingsScene extends BaseScene {
     };
   }
 
-  private addLanguageRow(
-    x: number,
-    y: number,
-    onOpen: () => void,
-    onClose: () => void,
-  ) {
+  private addLanguageRow(x: number, y: number) {
     const trackWidth = 200;
     const langs: { label: string; value: "en" | "zh" }[] = [
       { label: "English", value: "en" },
@@ -282,9 +299,10 @@ export default class SettingsScene extends BaseScene {
       })
       .setOrigin(0, 0.5);
 
-    let currentIndex = langs.findIndex(
+    const currentIndex = langs.findIndex(
       (l) => l.value === this.current.language,
     );
+    let hoverIndex = currentIndex;
     let isOpen = false;
 
     const selected = this.add
@@ -320,22 +338,42 @@ export default class SettingsScene extends BaseScene {
         .setVisible(false);
 
       opt.on("pointerover", () => {
-        if (this.current.language !== lang.value) opt.setColor("#ffffff");
+        hoverIndex = i;
+        highlightOptions();
       });
-      opt.on("pointerout", () => {
-        if (this.current.language !== lang.value) opt.setColor("#aaaaaa");
-      });
-      opt.on("pointerup", () => {
-        this.current.language = lang.value;
-        this.saveAndApply();
-        this.scene.restart();
-      });
+      opt.on("pointerup", () => selectLanguage(i));
 
       return opt;
     });
 
+    // Current language in orange, keyboard/hover focus in white.
+    const highlightOptions = () =>
+      options.forEach((o, i) =>
+        o.setColor(
+          i === currentIndex
+            ? "#f26500"
+            : i === hoverIndex
+              ? "#ffffff"
+              : "#aaaaaa",
+        ),
+      );
+
+    const selectLanguage = (index: number) => {
+      if (index === currentIndex) {
+        closeDropdown();
+        return;
+      }
+      this.current.language = langs[index].value;
+      this.saveAndApply();
+      // Labels are resolved with t() in create(), so redraw in the new language.
+      this.restoreRow = this.selectedRow;
+      this.scene.restart();
+    };
+
     const openDropdown = () => {
       isOpen = true;
+      hoverIndex = currentIndex;
+      highlightOptions();
       dropBg.setVisible(true);
       this.children.bringToTop(dropBg);
       options.forEach((o) => {
@@ -343,7 +381,6 @@ export default class SettingsScene extends BaseScene {
         this.children.bringToTop(o);
       });
       selected.setText(`${langs[currentIndex].label} ▴`);
-      onOpen();
     };
 
     const closeDropdown = () => {
@@ -351,7 +388,6 @@ export default class SettingsScene extends BaseScene {
       dropBg.setVisible(false);
       options.forEach((o) => o.setVisible(false));
       selected.setText(`${langs[currentIndex].label} ▾`);
-      onClose();
     };
 
     selected.on("pointerup", () => (isOpen ? closeDropdown() : openDropdown()));
@@ -370,15 +406,20 @@ export default class SettingsScene extends BaseScene {
       },
     );
 
+    const step = (index: number, dir: number) =>
+      (index + dir + langs.length) % langs.length;
+
     return {
+      isOpen: () => isOpen,
       toggle: () => (isOpen ? closeDropdown() : openDropdown()),
-      nudge: (dir: number) => {
-        // cycle through languages with A/D
-        currentIndex = (currentIndex + dir + langs.length) % langs.length;
-        this.current.language = langs[currentIndex].value;
-        this.saveAndApply();
-        selected.setText(`${langs[currentIndex].label} ▾`);
+      // cycle through languages with A/D while the dropdown is closed
+      nudge: (dir: number) => selectLanguage(step(currentIndex, dir)),
+      // move the focus / pick it while the dropdown is open
+      move: (dir: number) => {
+        hoverIndex = step(hoverIndex, dir);
+        highlightOptions();
       },
+      confirm: () => selectLanguage(hoverIndex),
       highlight: (active: boolean) =>
         labelText.setColor(active ? "#ffffff" : "#aaaaaa"),
     };
