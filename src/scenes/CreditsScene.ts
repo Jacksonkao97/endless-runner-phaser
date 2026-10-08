@@ -1,4 +1,5 @@
 import { GameObjects, Math, Time, Tweens } from "phaser";
+import { t } from "../i18n";
 import Settings from "../settings";
 import { BaseScene } from "./BaseScene";
 
@@ -30,7 +31,7 @@ export default class CreditsScene extends BaseScene {
       .setDepth(10);
 
     this.add
-      .text(centerX, 38, "CREDITS", {
+      .text(centerX, 38, t("credits.title"), {
         fontFamily: "Black Ops One",
         fontSize: "42px",
         color: "#ffffff",
@@ -41,23 +42,34 @@ export default class CreditsScene extends BaseScene {
 
     this.add.rectangle(centerX, 72, 320, 1, 0xffffff, 0.2).setDepth(11);
 
+    // Pointer/touch way out — keyboard users have Esc/Backspace.
+    const backBtn = this.add
+      .text(20, 38, t("credits.back"), {
+        fontFamily: "Black Ops One",
+        fontSize: "16px",
+        color: "#aaaaaa",
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(11)
+      .setInteractive({ useHandCursor: true });
+
+    backBtn.on("pointerover", () => backBtn.setColor("#ffffff"));
+    backBtn.on("pointerout", () => backBtn.setColor("#aaaaaa"));
+    backBtn.on("pointerdown", () => backBtn.setColor("#f26500"));
+    backBtn.on("pointerup", () => this.goBack());
+
     const FOOTER_H = 48;
     this.add
       .rectangle(centerX, height - FOOTER_H / 2, width, FOOTER_H, 0x0a0a0f)
       .setDepth(10);
 
     const backPrompt = this.add
-      .text(
-        centerX,
-        height - 20,
-        "[ ESC / BACKSPACE ] BACK  ·  [ ↑↓ ] SCROLL",
-        {
-          fontFamily: "Black Ops One",
-          fontSize: "12px",
-          color: "#555555",
-          letterSpacing: 2,
-        },
-      )
+      .text(centerX, height - 20, t("credits.hint"), {
+        fontFamily: "Black Ops One",
+        fontSize: "12px",
+        color: "#555555",
+        letterSpacing: 2,
+      })
       .setOrigin(0.5)
       .setDepth(11);
 
@@ -110,9 +122,11 @@ export default class CreditsScene extends BaseScene {
           "Zerie",
           "16-bit Character & Monster Pack",
           "itch.io",
+          "",
           "ShinobuGaen",
           "Demo_lugio Pack",
           "itch.io",
+          "",
           "LuizMelo",
           "Monsters Creatures Fantasy Pack",
           "itch.io",
@@ -120,7 +134,7 @@ export default class CreditsScene extends BaseScene {
       },
       {
         label: "BUILT WITH",
-        lines: ["Phaser 3  ·  TypeScript  ·  Vite"],
+        lines: ["Phaser 4  ·  TypeScript  ·  Vite"],
       },
     ];
 
@@ -229,7 +243,8 @@ export default class CreditsScene extends BaseScene {
       this.autoScrollTween?.stop();
     });
 
-    this.addFooter();
+    // Above the fixed footer bar (depth 10), which would otherwise hide it.
+    this.addFooter(11);
     this.applyContrast(Settings.load().contrast);
   }
 

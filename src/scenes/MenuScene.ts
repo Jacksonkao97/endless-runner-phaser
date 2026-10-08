@@ -17,7 +17,7 @@ export default class MenuScene extends BaseScene {
       { label: t("menu.play"), scene: "Game" },
       { label: t("menu.leaderboard"), scene: "Leaderboard" },
       { label: t("menu.settings"), scene: "Settings" },
-      { label: "Credits", scene: "Credits" },
+      { label: t("menu.credits"), scene: "Credits" },
       { label: t("menu.exit"), scene: null },
     ];
 

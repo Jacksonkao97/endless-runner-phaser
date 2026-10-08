@@ -144,7 +144,7 @@ export default class GameScene extends BaseScene {
 
   private scoreText!: GameObjects.Text;
   private obstacleTimer!: Time.TimerEvent;
-  private startTimestamp = 0;
+  private elapsedMs = 0; // played time; excludes time the tab was hidden
 
   constructor() {
     super("Game");
@@ -153,14 +153,14 @@ export default class GameScene extends BaseScene {
   create() {
     const { width, height } = this.scale;
     this.isGameOver = false;
-    this.isOnGround = false;
+    this.isOnGround = true; // player spawns standing on the ground
     this.isCrouching = false;
     this.jumpCount = 0;
     this.score = 0;
     this.scrollSpeed = SCROLL_SPEED_INITIAL;
     this.groundY = height - GROUND_Y_OFFSET;
     this.bgLayers = [];
-    this.startTimestamp = Date.now();
+    this.elapsedMs = 0;
 
     this.buildBackground(width, height);
     this.buildGround(width, height);
@@ -179,6 +179,7 @@ export default class GameScene extends BaseScene {
   update(_time: number, delta: number) {
     if (this.isGameOver) return;
 
+    this.elapsedMs += delta;
     this.scrollSpeed += SCROLL_ACCELERATION * (delta / 1000);
 
     // Scroll parallax bg tile layers
@@ -687,9 +688,7 @@ export default class GameScene extends BaseScene {
     if (this.isGameOver) return;
     this.isGameOver = true;
 
-    const durationSeconds = window.Math.round(
-      (Date.now() - this.startTimestamp) / 1000,
-    );
+    const durationSeconds = window.Math.round(this.elapsedMs / 1000);
 
     this.obstacles.getChildren().forEach((obj) => {
       (obj as Physics.Arcade.Image).setActive(false);

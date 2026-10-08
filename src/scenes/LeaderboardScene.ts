@@ -96,13 +96,15 @@ export default class LeaderboardScene extends BaseScene {
     // ── Fetch scores ──────────────────────────────────────────────────────────
     fetchTopScores(MAX_ROWS)
       .then((records) => {
-        if (!this.scene.isActive()) return; // scene left before fetch resolved
+        // loadingText is destroyed when the scene shuts down, so this also
+        // drops a stale fetch after leaving and re-entering the leaderboard.
+        if (!loadingText.active) return;
         loadingText.destroy();
         this.renderScores(records, centerX, centerY);
       })
       .catch((err) => {
         console.error("[leaderboard] fetch failed:", err);
-        if (!this.scene.isActive()) return;
+        if (!loadingText.active) return;
         loadingText.setText(t("leaderboard.loadError"));
         loadingText.setColor("#ff6666");
       });

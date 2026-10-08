@@ -9,7 +9,7 @@ const DEV_NAME = "Jackson Kao";
 export class BaseScene extends Scene {
   private contrastOverlay?: GameObjects.Rectangle;
 
-  addFooter() {
+  addFooter(depth = 0) {
     const { height } = this.scale;
     const bottomY = height - 24;
 
@@ -19,7 +19,8 @@ export class BaseScene extends Scene {
         color: "#aaaaaa",
         fontFamily: "Black Ops One",
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setDepth(depth);
 
     this.add
       .text(10, bottomY, DEV_NAME, {
@@ -27,9 +28,10 @@ export class BaseScene extends Scene {
         color: "#ffffff",
         fontFamily: "Black Ops One",
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setDepth(depth);
 
-    this.add.rectangle(115, bottomY - 8, 1, 32, 0xaaaaaa);
+    this.add.rectangle(115, bottomY - 8, 1, 32, 0xaaaaaa).setDepth(depth);
 
     this.add
       .text(130, bottomY - 16, t("footer.version"), {
@@ -37,7 +39,8 @@ export class BaseScene extends Scene {
         color: "#aaaaaa",
         fontFamily: "Black Ops One",
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setDepth(depth);
 
     this.add
       .text(130, bottomY, VERSION, {
@@ -45,7 +48,8 @@ export class BaseScene extends Scene {
         color: "#ffffff",
         fontFamily: "Black Ops One",
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setDepth(depth);
   }
 
   showConfirm(
