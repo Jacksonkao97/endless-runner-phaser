@@ -11,4 +11,8 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  build: {
+    // Phaser alone is ~1.4 MB minified and can't be split further.
+    chunkSizeWarningLimit: 1500,
+  },
 });

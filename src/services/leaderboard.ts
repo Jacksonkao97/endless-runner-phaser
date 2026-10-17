@@ -1,13 +1,13 @@
-import {
-  addDoc,
-  collection,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-} from "firebase/firestore";
-import { authReady, db } from "../firebase";
+// Firebase is loaded on demand (and prefetched from main.ts) to keep it out of
+// the main bundle.
+async function loadFirestore() {
+  const [firestore, { authReady, db }] = await Promise.all([
+    import("firebase/firestore"),
+    import("../firebase"),
+  ]);
+  await authReady; // ensure we have an auth token before reading or writing
+  return { ...firestore, db };
+}
 
 export interface LeaderboardEntry {
   name: string;
@@ -23,7 +23,7 @@ export interface LeaderboardRecord extends LeaderboardEntry {
 const SCORES_COLLECTION = "scores";
 
 export async function submitScore(entry: LeaderboardEntry): Promise<void> {
-  await authReady; // ensure we have an auth token before writing
+  const { addDoc, collection, db, serverTimestamp } = await loadFirestore();
 
   await addDoc(collection(db, SCORES_COLLECTION), {
     name: entry.name,
@@ -36,7 +36,8 @@ export async function submitScore(entry: LeaderboardEntry): Promise<void> {
 export async function fetchTopScores(
   limitCount = 10,
 ): Promise<LeaderboardRecord[]> {
-  await authReady;
+  const { collection, db, getDocs, limit, orderBy, query } =
+    await loadFirestore();
 
   const q = query(
     collection(db, SCORES_COLLECTION),

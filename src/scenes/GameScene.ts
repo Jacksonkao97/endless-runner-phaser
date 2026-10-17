@@ -46,8 +46,6 @@ type DecoCategory = {
   minGap: number; // ms minimum between spawns in this category
   maxGap: number;
   allowOverlap?: boolean;
-  timer?: Time.TimerEvent;
-  lastItem?: GameObjects.Image;
 };
 const DECO_CATEGORIES: DecoCategory[] = [
   {
@@ -124,6 +122,46 @@ const OBSTACLE_TYPES: ObstacleType[] = [
   },
 ];
 
+// Solid-colour stand-ins generated when a texture failed to load.
+type PlaceholderDef = {
+  key: string;
+  width: number;
+  height: number;
+  color: number;
+};
+// prettier-ignore
+const PLACEHOLDER_TEXTURES: PlaceholderDef[] = [
+  { key: "ground_texture",    width: 1,         height: 1,            color: 0xffffff },
+  { key: "character",         width: PLAYER_W,  height: PLAYER_H,     color: 0xdfe8a6 },
+  { key: "enemy_ground_idle", width: OBS_W,     height: OBS_GROUND_H, color: 0xff4444 },
+  { key: "enemy_mid_attack",  width: OBS_MID_W, height: OBS_MID_H,    color: 0xff8800 }, // orange: different danger signal
+  { key: "enemy_top_fly",     width: OBS_TOP_W, height: OBS_TOP_H,    color: 0xffdd00 }, // yellow: highest threat
+];
+
+type AnimDef = {
+  key: string;
+  texture: string;
+  start: number;
+  end: number;
+  frameRate: number;
+  repeat: number; // -1 loops forever
+};
+// prettier-ignore
+const ANIM_DEFS: AnimDef[] = [
+  { key: "run",                 texture: "character",           start: 20, end: 27, frameRate: 16, repeat: -1 },
+  { key: "jump",                texture: "character",           start: 30, end: 33, frameRate: 8,  repeat: 0 },
+  { key: "fall",                texture: "character",           start: 40, end: 44, frameRate: 8,  repeat: 0 },
+  { key: "dead",                texture: "character",           start: 60, end: 69, frameRate: 20, repeat: 0 },
+  { key: "enemy_ground_idle",   texture: "enemy_ground_idle",   start: 0,  end: 5,  frameRate: 12, repeat: -1 },
+  { key: "enemy_ground_attack", texture: "enemy_ground_attack", start: 0,  end: 5,  frameRate: 12, repeat: -1 },
+  { key: "enemy_ground_walk",   texture: "enemy_ground_walk",   start: 0,  end: 7,  frameRate: 16, repeat: -1 },
+  { key: "enemy_mid_attack",    texture: "enemy_mid_attack",    start: 0,  end: 5,  frameRate: 12, repeat: -1 },
+  { key: "enemy_top_fly",       texture: "enemy_top_fly",       start: 0,  end: 2,  frameRate: 6,  repeat: -1 },
+];
+
+// Scroll factor stored on the game object itself, read every frame in update().
+type Parallaxed<T> = T & { __parallax: number };
+
 export default class GameScene extends BaseScene {
   private player!: Types.Physics.Arcade.SpriteWithDynamicBody;
   private groundSpriteTop!: GameObjects.TileSprite;
@@ -131,8 +169,10 @@ export default class GameScene extends BaseScene {
   private ground!: Physics.Arcade.StaticGroup;
   private obstacles!: Physics.Arcade.Group;
 
-  private bgLayers: GameObjects.TileSprite[] = [];
+  private bgLayers: Parallaxed<GameObjects.TileSprite>[] = [];
   private bgDecorations!: GameObjects.Group;
+  // Last decoration spawned per category, for the no-overlap guard.
+  private decoLastItem = new Map<DecoCategory, GameObjects.Image>();
 
   private scrollSpeed = SCROLL_SPEED_INITIAL;
   private score = 0;
@@ -160,8 +200,11 @@ export default class GameScene extends BaseScene {
     this.scrollSpeed = SCROLL_SPEED_INITIAL;
     this.groundY = height - GROUND_Y_OFFSET;
     this.bgLayers = [];
+    this.decoLastItem.clear();
     this.elapsedMs = 0;
 
+    this.ensureTextures();
+    this.ensureAnimations();
     this.buildBackground(width, height);
     this.buildGround(width, height);
     this.buildPlayer();
@@ -181,31 +224,29 @@ export default class GameScene extends BaseScene {
 
     this.elapsedMs += delta;
     this.scrollSpeed += SCROLL_ACCELERATION * (delta / 1000);
+    const dx = this.scrollSpeed * (delta / 1000); // px the world moves this frame
 
     // Scroll parallax bg tile layers
-    this.bgLayers.forEach((layer) => {
-      const factor: number = (layer as any).__parallax;
-      if (factor > 0) {
-        layer.tilePositionX += this.scrollSpeed * factor * (delta / 1000);
-      }
-    });
+    for (const layer of this.bgLayers) {
+      layer.tilePositionX += dx * layer.__parallax;
+    }
 
     // Scroll the ground left
-    this.groundSpriteTop.tilePositionX += this.scrollSpeed * (delta / 1000);
-    this.groundSpriteFill.tilePositionX += this.scrollSpeed * (delta / 1000);
+    this.groundSpriteTop.tilePositionX += dx;
+    this.groundSpriteFill.tilePositionX += dx;
 
     // Scroll all obstacles left
     this.obstacles.getChildren().forEach((obj) => {
-      const obs = obj as Physics.Arcade.Image;
-      obs.x -= this.scrollSpeed * (delta / 1000);
+      const obs = obj as Physics.Arcade.Sprite;
+      obs.x -= dx;
       if (obs.x < -obs.width) obs.destroy();
     });
 
     // Scroll bg decorations (clouds, trees) at their own parallax factor
     this.bgDecorations.getChildren().forEach((obj) => {
-      const dec = obj as GameObjects.Image & { __parallax: number };
-      dec.x -= this.scrollSpeed * dec.__parallax * (delta / 1000);
-      if (dec.x < -(dec.width ?? 64)) dec.destroy();
+      const dec = obj as Parallaxed<GameObjects.Image>;
+      dec.x -= dx * dec.__parallax;
+      if (dec.x < -dec.width) dec.destroy();
     });
 
     // Ground contact — reset jump count when landing
@@ -222,8 +263,33 @@ export default class GameScene extends BaseScene {
     this.isOnGround = onGround;
 
     // Score
-    this.score += (this.scrollSpeed * (delta / 1000)) / 10;
+    this.score += dx / 10;
     this.scoreText.setText(`${Math.FloorTo(this.score)}`);
+  }
+
+  // Textures and animations are global to the game, so only the first run
+  // creates them.
+  private ensureTextures() {
+    for (const { key, width, height, color } of PLACEHOLDER_TEXTURES) {
+      if (this.textures.exists(key)) continue;
+      const gfx = this.make.graphics({ x: 0, y: 0 }, false);
+      gfx.fillStyle(color);
+      gfx.fillRect(0, 0, width, height);
+      gfx.generateTexture(key, width, height);
+      gfx.destroy();
+    }
+  }
+
+  private ensureAnimations() {
+    for (const { key, texture, start, end, frameRate, repeat } of ANIM_DEFS) {
+      if (this.anims.exists(key)) continue;
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers(texture, { start, end }),
+        frameRate,
+        repeat,
+      });
+    }
   }
 
   private buildBackground(width: number, height: number) {
@@ -237,8 +303,9 @@ export default class GameScene extends BaseScene {
       .setOrigin(0.5, 0.5)
       .setTileScale(1, scaleY)
       .setDepth(skyDef.depth);
-    (skyLayer as any).__parallax = skyDef.parallax;
-    this.bgLayers.push(skyLayer);
+    this.bgLayers.push(
+      Object.assign(skyLayer, { __parallax: skyDef.parallax }),
+    );
 
     // ── Layers 2–5: anchored to bottom ───────────────────────────────────────
     for (const def of BG_LAYER_DEFS.slice(1)) {
@@ -246,8 +313,7 @@ export default class GameScene extends BaseScene {
         .tileSprite(width / 2, height, width, TEX_H, def.key)
         .setOrigin(0.5, 1)
         .setDepth(def.depth);
-      (layer as any).__parallax = def.parallax;
-      this.bgLayers.push(layer);
+      this.bgLayers.push(Object.assign(layer, { __parallax: def.parallax }));
     }
   }
 
@@ -263,7 +329,7 @@ export default class GameScene extends BaseScene {
 
   private scheduleCategorySpawn(cat: DecoCategory) {
     const delay = Math.Between(cat.minGap, cat.maxGap);
-    cat.timer = this.time.delayedCall(delay, () => {
+    this.time.delayedCall(delay, () => {
       if (!this.isGameOver) {
         this.spawnDecoration(cat);
         this.scheduleCategorySpawn(cat); // reschedule
@@ -276,8 +342,9 @@ export default class GameScene extends BaseScene {
 
     // Overlap guard — skip this spawn if the previous item hasn't cleared
     // the right edge of the screen yet. Rescheduling handles the retry.
-    if (!cat.allowOverlap && cat.lastItem?.active) {
-      const lastRight = cat.lastItem.x + cat.lastItem.width;
+    const lastItem = this.decoLastItem.get(cat);
+    if (!cat.allowOverlap && lastItem?.active) {
+      const lastRight = lastItem.x + lastItem.width;
       if (lastRight > width) return; // still on screen, skip
     }
 
@@ -296,9 +363,8 @@ export default class GameScene extends BaseScene {
       .setOrigin(0, 0)
       .setDepth(cat.depth);
 
-    (dec as any).__parallax = cat.parallax;
-    this.bgDecorations.add(dec);
-    cat.lastItem = dec;
+    this.bgDecorations.add(Object.assign(dec, { __parallax: cat.parallax }));
+    this.decoLastItem.set(cat, dec);
   }
 
   private buildGround(width: number, _height: number) {
@@ -324,15 +390,6 @@ export default class GameScene extends BaseScene {
       )
       .setDepth(1);
 
-    if (!this.textures.exists("ground_texture")) {
-      const gfx = this.make.graphics({ x: 0, y: 0 });
-      gfx.setVisible(false);
-      gfx.fillStyle(0xffffff);
-      gfx.fillRect(0, 0, 1, 1);
-      gfx.generateTexture("ground_texture", 1, 1);
-      gfx.destroy();
-    }
-
     this.ground = this.physics.add.staticGroup();
     const groundImg = this.ground.create(
       width / 2,
@@ -346,64 +403,6 @@ export default class GameScene extends BaseScene {
 
   private buildPlayer() {
     const playerY = this.groundY - PLAYER_H / 2;
-
-    if (!this.textures.exists("character")) {
-      const gfx = this.make.graphics({ x: 0, y: 0 });
-      gfx.setVisible(false);
-      gfx.fillStyle(0xdfe8a6);
-      gfx.fillRect(0, 0, PLAYER_W, PLAYER_H);
-      gfx.generateTexture("character", PLAYER_W, PLAYER_H);
-      gfx.destroy();
-    }
-
-    if (!this.anims.exists("run")) {
-      this.anims.create({
-        key: "run",
-        frames: this.anims.generateFrameNumbers("character", {
-          start: 20,
-          end: 27,
-        }),
-        frameRate: 16,
-        repeat: -1,
-      });
-    }
-
-    if (!this.anims.exists("jump")) {
-      this.anims.create({
-        key: "jump",
-        frames: this.anims.generateFrameNumbers("character", {
-          start: 30,
-          end: 33,
-        }),
-        frameRate: 8,
-        repeat: 0,
-        hideOnComplete: false,
-      });
-    }
-
-    if (!this.anims.exists("fall")) {
-      this.anims.create({
-        key: "fall",
-        frames: this.anims.generateFrameNumbers("character", {
-          start: 40,
-          end: 44,
-        }),
-        frameRate: 8,
-        repeat: 0,
-      });
-    }
-
-    if (!this.anims.exists("dead")) {
-      this.anims.create({
-        key: "dead",
-        frames: this.anims.generateFrameNumbers("character", {
-          start: 60,
-          end: 69,
-        }),
-        frameRate: 20,
-        repeat: 0,
-      });
-    }
 
     this.player = this.physics.add.sprite(
       PLAYER_X_OFFSET,
@@ -423,91 +422,6 @@ export default class GameScene extends BaseScene {
   }
 
   private buildObstacleGroup() {
-    // Ground obstacle texture
-    if (!this.textures.exists("enemy_ground_idle")) {
-      const gfx = this.make.graphics({ x: 0, y: 0 });
-      gfx.setVisible(false);
-      gfx.fillStyle(0xff4444);
-      gfx.fillRect(0, 0, OBS_W, OBS_GROUND_H);
-      gfx.generateTexture("enemy_ground_idle", OBS_W, OBS_GROUND_H);
-      gfx.destroy();
-    }
-    if (!this.anims.exists("enemy_ground_idle")) {
-      this.anims.create({
-        key: "enemy_ground_idle",
-        frames: this.anims.generateFrameNumbers("enemy_ground_idle", {
-          start: 0,
-          end: 5,
-        }),
-        frameRate: 12,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("enemy_ground_attack")) {
-      this.anims.create({
-        key: "enemy_ground_attack",
-        frames: this.anims.generateFrameNumbers("enemy_ground_attack", {
-          start: 0,
-          end: 5,
-        }),
-        frameRate: 12,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("enemy_ground_walk")) {
-      this.anims.create({
-        key: "enemy_ground_walk",
-        frames: this.anims.generateFrameNumbers("enemy_ground_walk", {
-          start: 0,
-          end: 7,
-        }),
-        frameRate: 16,
-        repeat: -1,
-      });
-    }
-
-    // Mid floating obstacle texture (orange tint — different danger signal)
-    if (!this.textures.exists("enemy_mid_attack")) {
-      const gfx = this.make.graphics({ x: 0, y: 0 });
-      gfx.setVisible(false);
-      gfx.fillStyle(0xff8800);
-      gfx.fillRect(0, 0, OBS_MID_W, OBS_MID_H);
-      gfx.generateTexture("enemy_mid_attack", OBS_MID_W, OBS_MID_H);
-      gfx.destroy();
-    }
-    if (!this.anims.exists("enemy_mid_attack")) {
-      this.anims.create({
-        key: "enemy_mid_attack",
-        frames: this.anims.generateFrameNumbers("enemy_mid_attack", {
-          start: 0,
-          end: 5,
-        }),
-        frameRate: 12,
-        repeat: -1,
-      });
-    }
-
-    // Top floating obstacle texture (yellow — highest threat)
-    if (!this.textures.exists("enemy_top_fly")) {
-      const gfx = this.make.graphics({ x: 0, y: 0 });
-      gfx.setVisible(false);
-      gfx.fillStyle(0xffdd00);
-      gfx.fillRect(0, 0, OBS_TOP_W, OBS_TOP_H);
-      gfx.generateTexture("enemy_top_fly", OBS_TOP_W, OBS_TOP_H);
-      gfx.destroy();
-    }
-    if (!this.anims.exists("enemy_top_fly")) {
-      this.anims.create({
-        key: "enemy_top_fly",
-        frames: this.anims.generateFrameNumbers("enemy_top_fly", {
-          start: 0,
-          end: 2,
-        }),
-        frameRate: 6,
-        repeat: -1,
-      });
-    }
-
     this.obstacles = this.physics.add.group({
       classType: Physics.Arcade.Sprite, // 👈 needed so obs.play() works
     });
@@ -678,9 +592,6 @@ export default class GameScene extends BaseScene {
       this.input.keyboard!.removeAllListeners();
       this.input.removeAllListeners();
       if (this.obstacleTimer) this.obstacleTimer.remove();
-      for (const cat of DECO_CATEGORIES) {
-        cat.timer?.remove();
-      }
     });
   }
 
