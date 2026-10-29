@@ -14,7 +14,7 @@ npx tsc            # type-check only (noEmit)
 
 There is no test suite and no linter. Code is formatted with Prettier defaults (`npx prettier --write src`), though it isn't a dependency. `npm run build` is the verification step: CI runs exactly that, and the strict tsconfig (`noUnusedLocals`, `noUnusedParameters`) fails the build on unused code. Prefix intentionally unused parameters with `_`.
 
-Deployment is automatic: pushing to `main` runs `.github/workflows/deploy.yml` (Node 22), which builds and publishes `dist/` to GitHub Pages. There is no deploy script.
+Deployment is automatic: pushing to `main` runs `.github/workflows/deploy.yml` on the Node version in `.nvmrc` (24 LTS), which builds and publishes `dist/` to GitHub Pages. There is no deploy script.
 
 ## Architecture
 
